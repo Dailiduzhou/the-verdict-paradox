@@ -237,6 +237,7 @@ func (x *GetMatchStatusRequest) GetMatchid() string {
 type GetMatchStatusReply struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Status        string                 `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
+	RoomID        string                 `protobuf:"bytes,2,opt,name=roomID,proto3" json:"roomID,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -278,6 +279,13 @@ func (x *GetMatchStatusReply) GetStatus() string {
 	return ""
 }
 
+func (x *GetMatchStatusReply) GetRoomID() string {
+	if x != nil {
+		return x.RoomID
+	}
+	return ""
+}
+
 var File_api_game_v1_game_proto protoreflect.FileDescriptor
 
 const file_api_game_v1_game_proto_rawDesc = "" +
@@ -291,9 +299,10 @@ const file_api_game_v1_game_proto_rawDesc = "" +
 	"\x04name\x18\x01 \x01(\tR\x04name\"\x12\n" +
 	"\x10CancelMatchReply\"1\n" +
 	"\x15GetMatchStatusRequest\x12\x18\n" +
-	"\amatchid\x18\x01 \x01(\tR\amatchid\"-\n" +
+	"\amatchid\x18\x01 \x01(\tR\amatchid\"E\n" +
 	"\x13GetMatchStatusReply\x12\x16\n" +
-	"\x06status\x18\x01 \x01(\tR\x06status2\xd3\x02\n" +
+	"\x06status\x18\x01 \x01(\tR\x06status\x12\x16\n" +
+	"\x06roomID\x18\x02 \x01(\tR\x06roomID2\xd3\x02\n" +
 	"\x04Game\x12e\n" +
 	"\n" +
 	"StartMatch\x12\x1e.api.game.v1.StartMatchRequest\x1a\x1c.api.game.v1.StartMatchReply\"\x19\x82\xd3\xe4\x93\x02\x13:\x01*\"\x0e/v1/game/start\x12i\n" +
