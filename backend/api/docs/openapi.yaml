@@ -56,6 +56,18 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/RegisterReply"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          description: "用户名已存在"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                code: 409
+                reason: "USER_EXISTS"
+                message: "user zhangsan already exists"
         "500":
           $ref: "#/components/responses/InternalError"
 
@@ -407,6 +419,43 @@ components:
             code: 404
             reason: "USER_NOT_FOUND"
             message: "user not found"
+    BadRequest:
+      description: "请求参数校验失败"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          examples:
+            empty_name:
+              summary: "用户名为空"
+              value:
+                code: 400
+                reason: "EMPTY_NAME"
+                message: "name is required"
+            invalid_name:
+              summary: "用户名格式无效"
+              value:
+                code: 400
+                reason: "INVALID_NAME"
+                message: "name must be 2-50 characters"
+            empty_password:
+              summary: "密码为空"
+              value:
+                code: 400
+                reason: "EMPTY_PASSWORD"
+                message: "password is required"
+            weak_password:
+              summary: "密码过短"
+              value:
+                code: 400
+                reason: "WEAK_PASSWORD"
+                message: "password must be at least 6 characters"
+            max_password:
+              summary: "密码过长"
+              value:
+                code: 400
+                reason: "WEAK_PASSWORD"
+                message: "password must be at most 72 characters"
     InternalError:
       description: "服务器内部错误"
       content:
@@ -415,8 +464,8 @@ components:
             $ref: "#/components/schemas/ErrorResponse"
           example:
             code: 500
-            reason: "DB_ERROR"
-            message: "failed to create user"
+            reason: "PASSWORD_ERROR"
+            message: "password hash failed"
 
   schemas:
     # ---- User ----
@@ -426,12 +475,15 @@ components:
       properties:
         name:
           type: "string"
-          description: "用户名"
-          minLength: 1
+          description: "用户名，2-50 字符，仅允许字母、数字、下划线和中文"
+          minLength: 2
+          maxLength: 50
+          pattern: "^[a-zA-Z0-9_\\p{Han}]+$"
         password:
           type: "string"
-          description: "密码"
+          description: "密码，6-72 字符"
           minLength: 6
+          maxLength: 72
     RegisterReply:
       type: "object"
       properties:
