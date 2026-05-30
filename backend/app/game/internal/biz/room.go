@@ -13,11 +13,12 @@ import (
 )
 
 const (
-	pongWait     = 60 * time.Second
-	pingPeriod   = (pongWait * 9) / 10
-	writeWait    = 10 * time.Second
-	maxMsgSize   = 4096
-	maxPlayers   = 6
+	pongWait       = 60 * time.Second
+	pingPeriod     = (pongWait * 9) / 10
+	writeWait      = 10 * time.Second
+	maxMsgSize     = 4096
+	maxPlayers     = 6
+	realPlayers    = 4
 	answerTimeout  = 60 * time.Second
 	voteTimeout    = 30 * time.Second
 	resultDisplay  = 5 * time.Second
@@ -50,12 +51,13 @@ type Room struct {
 	Register   chan *Client
 	Unregister chan *Client
 
-	Game         *GameSession
-	gameUsecase  *GameUsecase
-	gameRepo     GameRepo
-	llmClient    LLMClient
+	Game        *GameSession
+	gameUsecase *GameUsecase
+	gameRepo    GameRepo
+	llmClient   LLMClient
 
 	mu         sync.RWMutex
+	aiGenMu    sync.Mutex
 	manager    *RoomManager
 	idleDone   chan struct{}
 	phaseTimer *time.Timer
@@ -64,17 +66,17 @@ type Room struct {
 
 func NewRoom(id string, manager *RoomManager) *Room {
 	return &Room{
-		ID:           id,
-		Clients:      make(map[*Client]bool),
-		Broadcast:    make(chan []byte, 256),
-		Register:     make(chan *Client),
-		Unregister:   make(chan *Client),
-		manager:      manager,
-		gameUsecase:  manager.gameUsecase,
-		gameRepo:     manager.gameRepo,
-		llmClient:    manager.llmClient,
-		idleDone:     make(chan struct{}),
-		log:          manager.log,
+		ID:          id,
+		Clients:     make(map[*Client]bool),
+		Broadcast:   make(chan []byte, 256),
+		Register:    make(chan *Client),
+		Unregister:  make(chan *Client),
+		manager:     manager,
+		gameUsecase: manager.gameUsecase,
+		gameRepo:    manager.gameRepo,
+		llmClient:   manager.llmClient,
+		idleDone:    make(chan struct{}),
+		log:         manager.log,
 	}
 }
 
@@ -242,9 +244,8 @@ func (r *Room) handleMessage(client *Client, msg *Message) {
 
 func (r *Room) handleAnswer(userID int64, msg *Message) {
 	r.mu.Lock()
-	defer r.mu.Unlock()
-
 	if r.Game == nil || r.Game.Phase != PhaseAnswer {
+		r.mu.Unlock()
 		return
 	}
 
@@ -254,40 +255,72 @@ func (r *Room) handleAnswer(userID int64, msg *Message) {
 	}
 
 	allDone := r.gameUsecase.SubmitAnswer(r.Game, userID, answerText)
-	if !allDone {
-		r.broadcastGameAction("player_answered", map[string]interface{}{
-			"user_id": userID,
-			"name":    msg.Sender,
-		})
-		return
-	}
+	r.mu.Unlock()
 
-	r.advanceToVote()
+	if allDone {
+		r.advanceToVote()
+	}
 }
 
 func (r *Room) handleVote(userID int64, targetUserID int64) {
 	r.mu.Lock()
-	defer r.mu.Unlock()
-
 	if r.Game == nil || r.Game.Phase != PhaseVote {
+		r.mu.Unlock()
 		return
 	}
 
 	allDone := r.gameUsecase.SubmitVote(r.Game, userID, targetUserID)
-	if !allDone {
-		return
-	}
+	r.mu.Unlock()
 
-	r.generateAIVotesAndTally()
+	if allDone {
+		r.generateAIVotesAndTally()
+	}
 }
 
 func (r *Room) advanceToVote() {
+	r.aiGenMu.Lock()
+
+	r.mu.Lock()
+	if r.Game == nil || r.Game.Phase != PhaseAnswer {
+		r.mu.Unlock()
+		r.aiGenMu.Unlock()
+		return
+	}
+	game := r.Game
+	r.mu.Unlock()
+
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	if err := r.gameUsecase.GenerateAIAnswers(ctx, r.Game); err != nil {
+	if err := r.gameUsecase.GenerateAIAnswers(ctx, game); err != nil {
 		r.log.Errorf("generate AI answers failed: %v", err)
 	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	defer r.aiGenMu.Unlock()
+
+	if r.Game != game || r.Game.Phase != PhaseAnswer {
+		return
+	}
+
+	r.gameUsecase.ShuffleAndCommitAnswers(r.Game)
+
+	currentRound := r.Game.Round
+	answers := make([]map[string]interface{}, 0)
+	for _, msg := range r.Game.ChatHistory {
+		if msg.Round == currentRound && msg.Phase == "answer" {
+			answers = append(answers, map[string]interface{}{
+				"user_id": msg.UserID,
+				"name":    msg.Name,
+				"content": msg.Content,
+			})
+		}
+	}
+	r.broadcastGameAction("all_answers", map[string]interface{}{
+		"round":   currentRound,
+		"answers": answers,
+	})
 
 	r.Game.Phase = PhaseVote
 	r.Game.VoteCount = 0
@@ -304,23 +337,42 @@ func (r *Room) advanceToVote() {
 
 	r.phaseTimer = time.AfterFunc(voteTimeout, func() {
 		r.mu.Lock()
-		defer r.mu.Unlock()
-		if r.Game != nil && r.Game.Phase == PhaseVote {
+		shouldAdvance := r.Game != nil && r.Game.Phase == PhaseVote
+		r.mu.Unlock()
+		if shouldAdvance {
 			r.generateAIVotesAndTally()
 		}
 	})
 }
 
 func (r *Room) generateAIVotesAndTally() {
+	r.aiGenMu.Lock()
+
+	r.mu.Lock()
+	if r.Game == nil || r.Game.Phase != PhaseVote {
+		r.mu.Unlock()
+		r.aiGenMu.Unlock()
+		return
+	}
 	if r.phaseTimer != nil {
 		r.phaseTimer.Stop()
 	}
+	game := r.Game
+	r.mu.Unlock()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	if err := r.gameUsecase.GenerateAIVotes(ctx, r.Game); err != nil {
+	if err := r.gameUsecase.GenerateAIVotes(ctx, game); err != nil {
 		r.log.Errorf("generate AI votes failed: %v", err)
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	defer r.aiGenMu.Unlock()
+
+	if r.Game != game || r.Game.Phase != PhaseVote {
+		return
 	}
 
 	eliminated := r.gameUsecase.TallyVotes(r.Game)
@@ -337,10 +389,10 @@ func (r *Room) generateAIVotesAndTally() {
 	voteData := r.buildVoteData()
 
 	r.broadcastGameAction("round_result", map[string]interface{}{
-		"round":       r.Game.Round,
-		"eliminated":  eliminatedName,
+		"round":         r.Game.Round,
+		"eliminated":    eliminatedName,
 		"eliminated_id": eliminated,
-		"votes":       voteData,
+		"votes":         voteData,
 	})
 
 	go r.gameRepo.SaveSession(context.Background(), r.Game)
@@ -353,10 +405,10 @@ func (r *Room) generateAIVotesAndTally() {
 
 	r.phaseTimer = time.AfterFunc(resultDisplay, func() {
 		r.mu.Lock()
-		defer r.mu.Unlock()
 		if r.Game != nil && r.Game.Phase == PhaseResult {
 			r.nextRound()
 		}
+		r.mu.Unlock()
 	})
 }
 
@@ -392,8 +444,9 @@ func (r *Room) nextRound() {
 
 			r.phaseTimer = time.AfterFunc(answerTimeout, func() {
 				r.mu.Lock()
-				defer r.mu.Unlock()
-				if r.Game != nil && r.Game.Phase == PhaseAnswer {
+				shouldAdvance := r.Game != nil && r.Game.Phase == PhaseAnswer
+				r.mu.Unlock()
+				if shouldAdvance {
 					r.advanceToVote()
 				}
 			})
@@ -558,8 +611,6 @@ func (r *Room) broadcastGameAction(action string, content interface{}) {
 		return
 	}
 
-	r.mu.RLock()
-	defer r.mu.RUnlock()
 	for client := range r.Clients {
 		select {
 		case client.Send <- final:
@@ -751,7 +802,7 @@ func (r *Room) handleDisconnect(client *Client) {
 
 func (r *Room) checkAllConnected() bool {
 	if r.Game == nil {
-		return len(r.Clients) >= maxPlayers
+		return len(r.Clients) >= realPlayers
 	}
 
 	connected := 0
@@ -801,7 +852,7 @@ func (r *Room) loadOrCreateGame() {
 		names[client.UserID] = client.Name
 	}
 
-	if len(playerIDs) < maxPlayers {
+	if len(playerIDs) < realPlayers {
 		return
 	}
 
