@@ -1,48 +1,47 @@
 package data
 
 import (
+	"context"
+	"fmt"
+
+	"github.com/Dailiduzhou/the-verdict-paradox/backend/app/game/internal/biz"
 	"github.com/Dailiduzhou/the-verdict-paradox/backend/app/game/internal/conf"
+	"github.com/Dailiduzhou/the-verdict-paradox/backend/app/game/internal/data/db"
 
 	"github.com/go-kratos/kratos/v2/log"
 	"github.com/google/wire"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
+	"golang.org/x/sync/singleflight"
 )
 
-}
 // ProviderSet is data providers.
 var ProviderSet = wire.NewSet(
-	NewPgxPool,  NewData, NewRedisClient, NewAuthRepo, NewUserRepo,
+	NewPgxPool, NewData, NewRedisClient, NewAuthRepo, NewUserRepo,
 	wire.Bind(new(biz.AuthRepo), new(*AuthRepo)),
 	wire.Bind(new(biz.UserRepo), new(*UserRepo)),
 )
 
 // Data .
 type Data struct {
-	pool        *pgxpool.Pool
-	rdb         *redis.Client
-	q           *db.Queries
-	sg          *singleflight.Group
+	rdb *redis.Client
+	q   *db.Queries
+	sg  *singleflight.Group
 }
 
 // NewData .
-func NewData(c *conf.Data, pool *pgxpool.Pool, rdb *redis.Client) (*Data, func(), error) {
-	ctx := context.Background()
-
+func NewData(pool *pgxpool.Pool, rdb *redis.Client) (*Data, func(), error) {
 	cleanup := func() {
-		rdb.Close()
-		pool.Close()
-
 		log.Info("closing the data resources")
 	}
 	return &Data{
-		pool:        pool,
-		rdb:         rdb,
-		q:           db.New(pool),
-		sg:          &singleflight.Group{},
+		rdb: rdb,
+		q:   db.New(pool),
+		sg:  &singleflight.Group{},
 	}, cleanup, nil
 }
 
-func NewRedisClient(c *conf.Data) (*redis.Client, error) {
+func NewRedisClient(c *conf.Data) (*redis.Client, func(), error) {
 	rdb := redis.NewClient(&redis.Options{
 		Addr:     c.Redis.Addr,
 		Password: "",
@@ -51,10 +50,11 @@ func NewRedisClient(c *conf.Data) (*redis.Client, error) {
 
 	if err := rdb.Ping(context.Background()).Err(); err != nil {
 		rdb.Close()
-		return nil, fmt.Errorf("ping redis: %w", err)
+		return nil, nil, fmt.Errorf("ping redis: %w", err)
 	}
 
-	return rdb, nil
+	cleanup := func() { rdb.Close() }
+	return rdb, cleanup, nil
 }
 
 func NewPgxPool(c *conf.Data) (*pgxpool.Pool, func(), error) {
@@ -65,4 +65,3 @@ func NewPgxPool(c *conf.Data) (*pgxpool.Pool, func(), error) {
 	cleanup := func() { pool.Close() }
 	return pool, cleanup, nil
 }
-
