@@ -33,7 +33,7 @@ func (s *UserService) Register(ctx context.Context, req *pb.RegisterRequest) (*p
 }
 
 func (s *UserService) Login(ctx context.Context, req *pb.LoginRequest) (*pb.LoginReply, error) {
-	user, token, err := s.authUc.Login(ctx, req.Phone, req.Password)
+	user, token, err := s.authUc.Login(ctx, req.Name, req.Password)
 	if err != nil {
 		return nil, err
 	}
