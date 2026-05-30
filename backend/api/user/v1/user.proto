@@ -57,7 +57,7 @@ message RegisterReply {
 }
 
 message LoginRequest {
-  string phone = 1;
+  string name = 1;
   string password = 2;
 }
 message LoginReply {
