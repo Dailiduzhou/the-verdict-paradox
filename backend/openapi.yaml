@@ -3,19 +3,19 @@
 
 openapi: 3.0.3
 info:
-    title: Game API
+    title: User API
     version: 0.0.1
 paths:
-    /v1/game/cancel:
+    /v1/users/login:
         post:
             tags:
-                - Game
-            operationId: Game_CancelMatch
+                - User
+            operationId: User_Login
             requestBody:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/CancelMatchRequest'
+                            $ref: '#/components/schemas/LoginRequest'
                 required: true
             responses:
                 "200":
@@ -23,23 +23,23 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/CancelMatchReply'
+                                $ref: '#/components/schemas/LoginReply'
                 default:
                     description: Default error response
                     content:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/Status'
-    /v1/game/start:
+    /v1/users/refresh:
         post:
             tags:
-                - Game
-            operationId: Game_StartMatch
+                - User
+            operationId: User_RefreshToken
             requestBody:
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/StartMatchRequest'
+                            $ref: '#/components/schemas/RefreshRequest'
                 required: true
             responses:
                 "200":
@@ -47,20 +47,68 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/StartMatchReply'
+                                $ref: '#/components/schemas/RefreshReply'
                 default:
                     description: Default error response
                     content:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/Status'
-    /v1/game/status/{matchid}:
+    /v1/users/register:
+        post:
+            tags:
+                - User
+            operationId: User_Register
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/RegisterRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/RegisterReply'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /v1/users/verify:
+        post:
+            tags:
+                - User
+            operationId: User_Verify
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/VerifyRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/VerifyReply'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /v1/users/{id}:
         get:
             tags:
-                - Game
-            operationId: Game_GetMatchStatus
+                - User
+            operationId: User_GetUser
             parameters:
-                - name: matchid
+                - name: id
                   in: path
                   required: true
                   schema:
@@ -71,7 +119,59 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/GetMatchStatusReply'
+                                $ref: '#/components/schemas/UserInfo'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+        put:
+            tags:
+                - User
+            operationId: User_UpdateUser
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateUserRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/UserInfo'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+        delete:
+            tags:
+                - User
+            operationId: User_DeleteUser
+            parameters:
+                - name: id
+                  in: path
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/DeleteUserReply'
                 default:
                     description: Default error response
                     content:
@@ -80,25 +180,9 @@ paths:
                                 $ref: '#/components/schemas/Status'
 components:
     schemas:
-        CancelMatchReply:
+        DeleteUserReply:
             type: object
             properties: {}
-        CancelMatchRequest:
-            type: object
-            properties:
-                name:
-                    type: string
-        GetMatchStatusReply:
-            type: object
-            properties:
-                status:
-                    type: string
-                roomID:
-                    type: string
-                users:
-                    type: array
-                    items:
-                        type: string
         GoogleProtobufAny:
             type: object
             properties:
@@ -107,15 +191,43 @@ components:
                     description: The type of the serialized message.
             additionalProperties: true
             description: Contains an arbitrary serialized message along with a @type that describes the type of the serialized message.
-        StartMatchReply:
+        LoginReply:
             type: object
             properties:
-                matchID:
+                id:
                     type: string
-        StartMatchRequest:
+                token:
+                    type: string
+        LoginRequest:
             type: object
             properties:
                 name:
+                    type: string
+                password:
+                    type: string
+        RefreshReply:
+            type: object
+            properties:
+                accessToken:
+                    type: string
+                refreshToken:
+                    type: string
+        RefreshRequest:
+            type: object
+            properties:
+                refreshToken:
+                    type: string
+        RegisterReply:
+            type: object
+            properties:
+                id:
+                    type: string
+        RegisterRequest:
+            type: object
+            properties:
+                name:
+                    type: string
+                password:
                     type: string
         Status:
             type: object
@@ -133,5 +245,32 @@ components:
                         $ref: '#/components/schemas/GoogleProtobufAny'
                     description: A list of messages that carry the error details.  There is a common set of message types for APIs to use.
             description: 'The `Status` type defines a logical error model that is suitable for different programming environments, including REST APIs and RPC APIs. It is used by [gRPC](https://github.com/grpc). Each `Status` message contains three pieces of data: error code, error message, and error details. You can find out more about this error model and how to work with it in the [API Design Guide](https://cloud.google.com/apis/design/errors).'
+        UpdateUserRequest:
+            type: object
+            properties:
+                id:
+                    type: string
+                name:
+                    type: string
+        UserInfo:
+            type: object
+            properties:
+                id:
+                    type: string
+                name:
+                    type: string
+                createdAt:
+                    type: string
+                    format: date-time
+        VerifyReply:
+            type: object
+            properties:
+                valid:
+                    type: boolean
+        VerifyRequest:
+            type: object
+            properties:
+                token:
+                    type: string
 tags:
-    - name: Game
+    - name: User
