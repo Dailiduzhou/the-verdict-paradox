@@ -1,7 +1,7 @@
 package server
 
 import (
-	v1 "github.com/Dailiduzhou/the-verdict-paradox/backend/api/helloworld/v1"
+	userv1 "github.com/Dailiduzhou/the-verdict-paradox/backend/api/user/v1"
 	"github.com/Dailiduzhou/the-verdict-paradox/backend/app/game/internal/conf"
 	"github.com/Dailiduzhou/the-verdict-paradox/backend/app/game/internal/service"
 
@@ -11,8 +11,8 @@ import (
 )
 
 // NewHTTPServer new an HTTP server.
-func NewHTTPServer(c *conf.Server, greeter *service.GreeterService, logger log.Logger) *http.Server {
-	var opts = []http.ServerOption{
+func NewHTTPServer(c *conf.Server, user *service.UserService, logger log.Logger) *http.Server {
+	opts := []http.ServerOption{
 		http.Middleware(
 			recovery.Recovery(),
 		),
@@ -27,6 +27,6 @@ func NewHTTPServer(c *conf.Server, greeter *service.GreeterService, logger log.L
 		opts = append(opts, http.Timeout(c.Http.Timeout.AsDuration()))
 	}
 	srv := http.NewServer(opts...)
-	v1.RegisterGreeterHTTPServer(srv, greeter)
+	userv1.RegisterUserHTTPServer(srv, user)
 	return srv
 }
