@@ -1,8 +1,10 @@
 package biz
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"sync"
 	"time"
 
@@ -11,20 +13,29 @@ import (
 )
 
 const (
-	pongWait   = 60 * time.Second
-	pingPeriod = (pongWait * 9) / 10
-	writeWait  = 10 * time.Second
-	maxMsgSize = 4096
+	pongWait     = 60 * time.Second
+	pingPeriod   = (pongWait * 9) / 10
+	writeWait    = 10 * time.Second
+	maxMsgSize   = 4096
+	maxPlayers   = 6
+	answerTimeout  = 60 * time.Second
+	voteTimeout    = 30 * time.Second
+	resultDisplay  = 5 * time.Second
+	questionDelay  = 500 * time.Millisecond
+	reconnectGrace = 2 * time.Minute
 )
 
 type Message struct {
-	Action  string          `json:"action"`
-	Sender  string          `json:"sender"`
-	Content json.RawMessage `json:"content"`
+	Action       string          `json:"action"`
+	Sender       string          `json:"sender"`
+	Content      json.RawMessage `json:"content"`
+	UserID       int64           `json:"user_id"`
+	TargetUserID int64           `json:"target_user_id,omitempty"`
 }
 
 type Client struct {
 	ID     string
+	UserID int64
 	Name   string
 	Conn   *websocket.Conn
 	Room   *Room
@@ -39,24 +50,119 @@ type Room struct {
 	Register   chan *Client
 	Unregister chan *Client
 
-	mu       sync.RWMutex
-	manager  *RoomManager
-	idleDone chan struct{}
-	log      *log.Helper
+	Game         *GameSession
+	gameUsecase  *GameUsecase
+	gameRepo     GameRepo
+	llmClient    LLMClient
+
+	mu         sync.RWMutex
+	manager    *RoomManager
+	idleDone   chan struct{}
+	phaseTimer *time.Timer
+	log        *log.Helper
 }
 
 func NewRoom(id string, manager *RoomManager) *Room {
 	return &Room{
-		ID:         id,
-		Clients:    make(map[*Client]bool),
-		Broadcast:  make(chan []byte, 256),
-		Register:   make(chan *Client),
-		Unregister: make(chan *Client),
-		manager:    manager,
-		idleDone:   make(chan struct{}),
-		log:        manager.log,
+		ID:           id,
+		Clients:      make(map[*Client]bool),
+		Broadcast:    make(chan []byte, 256),
+		Register:     make(chan *Client),
+		Unregister:   make(chan *Client),
+		manager:      manager,
+		gameUsecase:  manager.gameUsecase,
+		gameRepo:     manager.gameRepo,
+		llmClient:    manager.llmClient,
+		idleDone:     make(chan struct{}),
+		log:          manager.log,
 	}
 }
+
+type RoomManager struct {
+	rooms       map[string]*Room
+	mu          sync.RWMutex
+	gameUsecase *GameUsecase
+	gameRepo    GameRepo
+	llmClient   LLMClient
+	log         *log.Helper
+}
+
+func NewRoomManager(logger log.Logger, gameUsecase *GameUsecase, gameRepo GameRepo, llmClient LLMClient) *RoomManager {
+	return &RoomManager{
+		rooms:       make(map[string]*Room),
+		gameUsecase: gameUsecase,
+		gameRepo:    gameRepo,
+		llmClient:   llmClient,
+		log:         log.NewHelper(logger),
+	}
+}
+
+var upgrader = websocket.Upgrader{
+	HandshakeTimeout: 5 * time.Second,
+	ReadBufferSize:   1024,
+	WriteBufferSize:  1024,
+	CheckOrigin: func(r *http.Request) bool {
+		return true
+	},
+}
+
+func (rm *RoomManager) HandleWS(w http.ResponseWriter, r *http.Request, roomID string, userIDStr string, userName string) error {
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		rm.log.Errorf("websocket upgrade failed: %v", err)
+		return err
+	}
+
+	userID, err := strconv.ParseInt(userIDStr, 10, 64)
+	if err != nil {
+		rm.log.Errorf("parse userID failed: %v", err)
+		return err
+	}
+
+	rm.mu.Lock()
+	room, exists := rm.rooms[roomID]
+	if !exists {
+		room = NewRoom(roomID, rm)
+		rm.rooms[roomID] = room
+		go room.Run()
+	}
+	rm.mu.Unlock()
+
+	client := &Client{
+		ID:     userIDStr,
+		UserID: userID,
+		Name:   userName,
+		Conn:   conn,
+		Room:   room,
+		Send:   make(chan []byte, 256),
+		log:    rm.log,
+	}
+	room.Register <- client
+
+	go client.WritePump()
+	go client.ReadPump()
+
+	return nil
+}
+
+func (rm *RoomManager) RemoveRoom(roomID string) {
+	rm.mu.Lock()
+	defer rm.mu.Unlock()
+	if room, ok := rm.rooms[roomID]; ok {
+		close(room.idleDone)
+	}
+	delete(rm.rooms, roomID)
+	rm.log.Infof("room [%s] destroyed", roomID)
+}
+
+func (rm *RoomManager) HasRoom(roomID string) bool {
+	rm.mu.RLock()
+	defer rm.mu.RUnlock()
+	_, exists := rm.rooms[roomID]
+	return exists
+}
+
+// ---- Client pumps ----
 
 func (c *Client) ReadPump() {
 	defer func() {
@@ -86,9 +192,9 @@ func (c *Client) ReadPump() {
 			continue
 		}
 		msg.Sender = c.Name
+		msg.UserID = c.UserID
 
-		enriched, _ := json.Marshal(msg)
-		c.Room.Broadcast <- enriched
+		c.Room.handleMessage(c, &msg)
 	}
 }
 
@@ -120,23 +226,413 @@ func (c *Client) WritePump() {
 	}
 }
 
+// ---- Room game methods ----
+
+func (r *Room) handleMessage(client *Client, msg *Message) {
+	switch msg.Action {
+	case "answer":
+		r.handleAnswer(client.UserID, msg)
+	case "vote":
+		r.handleVote(client.UserID, msg.TargetUserID)
+	default:
+		data, _ := json.Marshal(msg)
+		r.Broadcast <- data
+	}
+}
+
+func (r *Room) handleAnswer(userID int64, msg *Message) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.Game == nil || r.Game.Phase != PhaseAnswer {
+		return
+	}
+
+	var answerText string
+	if err := json.Unmarshal(msg.Content, &answerText); err != nil {
+		answerText = string(msg.Content)
+	}
+
+	allDone := r.gameUsecase.SubmitAnswer(r.Game, userID, answerText)
+	if !allDone {
+		r.broadcastGameAction("player_answered", map[string]interface{}{
+			"user_id": userID,
+			"name":    msg.Sender,
+		})
+		return
+	}
+
+	r.advanceToVote()
+}
+
+func (r *Room) handleVote(userID int64, targetUserID int64) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.Game == nil || r.Game.Phase != PhaseVote {
+		return
+	}
+
+	allDone := r.gameUsecase.SubmitVote(r.Game, userID, targetUserID)
+	if !allDone {
+		return
+	}
+
+	r.generateAIVotesAndTally()
+}
+
+func (r *Room) advanceToVote() {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	if err := r.gameUsecase.GenerateAIAnswers(ctx, r.Game); err != nil {
+		r.log.Errorf("generate AI answers failed: %v", err)
+	}
+
+	r.Game.Phase = PhaseVote
+	r.Game.VoteCount = 0
+
+	if r.phaseTimer != nil {
+		r.phaseTimer.Stop()
+	}
+
+	r.broadcastGameAction("phase_change", map[string]interface{}{
+		"phase":     PhaseVote.String(),
+		"round":     r.Game.Round,
+		"timeout_s": 30,
+	})
+
+	r.phaseTimer = time.AfterFunc(voteTimeout, func() {
+		r.mu.Lock()
+		defer r.mu.Unlock()
+		if r.Game != nil && r.Game.Phase == PhaseVote {
+			r.generateAIVotesAndTally()
+		}
+	})
+}
+
+func (r *Room) generateAIVotesAndTally() {
+	if r.phaseTimer != nil {
+		r.phaseTimer.Stop()
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	if err := r.gameUsecase.GenerateAIVotes(ctx, r.Game); err != nil {
+		r.log.Errorf("generate AI votes failed: %v", err)
+	}
+
+	eliminated := r.gameUsecase.TallyVotes(r.Game)
+	r.Game.Phase = PhaseResult
+
+	eliminatedName := ""
+	for _, p := range r.Game.Players {
+		if p.UserID == eliminated {
+			eliminatedName = p.Name
+			break
+		}
+	}
+
+	voteData := r.buildVoteData()
+
+	r.broadcastGameAction("round_result", map[string]interface{}{
+		"round":       r.Game.Round,
+		"eliminated":  eliminatedName,
+		"eliminated_id": eliminated,
+		"votes":       voteData,
+	})
+
+	go r.gameRepo.SaveSession(context.Background(), r.Game)
+
+	gameOver, winner := r.gameUsecase.CheckWinCondition(r.Game)
+	if gameOver {
+		r.endGame(winner)
+		return
+	}
+
+	r.phaseTimer = time.AfterFunc(resultDisplay, func() {
+		r.mu.Lock()
+		defer r.mu.Unlock()
+		if r.Game != nil && r.Game.Phase == PhaseResult {
+			r.nextRound()
+		}
+	})
+}
+
+func (r *Room) nextRound() {
+	r.Game.Round++
+	r.Game.Phase = PhaseQuestion
+	r.Game.Question = r.gameUsecase.PickQuestion(r.Game)
+	r.gameUsecase.BeginRound(r.Game)
+
+	r.Game.ChatHistory = append(r.Game.ChatHistory, &ChatMessage{
+		Round:   r.Game.Round,
+		Phase:   "question",
+		UserID:  0,
+		Name:    "系统",
+		Content: r.Game.Question,
+	})
+
+	r.broadcastGameAction("question", map[string]interface{}{
+		"round":    r.Game.Round,
+		"question": r.Game.Question,
+	})
+
+	r.phaseTimer = time.AfterFunc(questionDelay, func() {
+		r.mu.Lock()
+		defer r.mu.Unlock()
+		if r.Game != nil && r.Game.Phase == PhaseQuestion {
+			r.Game.Phase = PhaseAnswer
+			r.broadcastGameAction("phase_change", map[string]interface{}{
+				"phase":     PhaseAnswer.String(),
+				"round":     r.Game.Round,
+				"timeout_s": 60,
+			})
+
+			r.phaseTimer = time.AfterFunc(answerTimeout, func() {
+				r.mu.Lock()
+				defer r.mu.Unlock()
+				if r.Game != nil && r.Game.Phase == PhaseAnswer {
+					r.advanceToVote()
+				}
+			})
+		}
+	})
+}
+
+func (r *Room) endGame(winner string) {
+	r.Game.Phase = PhaseEnd
+	r.Game.Winner = winner
+
+	if r.phaseTimer != nil {
+		r.phaseTimer.Stop()
+	}
+
+	playerData := make([]map[string]interface{}, 0, len(r.Game.Players))
+	for _, p := range r.Game.Players {
+		playerData = append(playerData, map[string]interface{}{
+			"user_id": p.UserID,
+			"name":    p.Name,
+			"role":    p.Role.String(),
+			"alive":   p.Alive,
+		})
+	}
+
+	r.broadcastGameAction("game_over", map[string]interface{}{
+		"winner":  winner,
+		"players": playerData,
+		"rounds":  r.Game.Round,
+	})
+
+	go func() {
+		time.Sleep(5 * time.Minute)
+		r.manager.RemoveRoom(r.ID)
+	}()
+}
+
+func (r *Room) startGame() {
+	r.gameUsecase.BeginRound(r.Game)
+	r.nextRound()
+
+	playerList := make([]map[string]interface{}, 0, len(r.Game.Players))
+	for _, p := range r.Game.Players {
+		playerList = append(playerList, map[string]interface{}{
+			"user_id": p.UserID,
+			"name":    p.Name,
+			"alive":   true,
+		})
+	}
+
+	for client := range r.Clients {
+		var role string
+		for _, p := range r.Game.Players {
+			if p.UserID == client.UserID {
+				role = p.Role.String()
+				break
+			}
+		}
+
+		msg := map[string]interface{}{
+			"your_role": role,
+			"players":   playerList,
+		}
+		data, _ := json.Marshal(Message{
+			Action: "game_started",
+			Sender: "system",
+		})
+		full := make(map[string]interface{})
+		json.Unmarshal(data, &full)
+		full["content"] = msg
+		final, _ := json.Marshal(full)
+		select {
+		case client.Send <- final:
+		default:
+		}
+	}
+
+	go r.gameRepo.SaveSession(context.Background(), r.Game)
+}
+
+func (r *Room) syncGameStateTo(client *Client) {
+	if r.Game == nil {
+		return
+	}
+
+	playerList := make([]map[string]interface{}, 0, len(r.Game.Players))
+	for _, p := range r.Game.Players {
+		playerList = append(playerList, map[string]interface{}{
+			"user_id": p.UserID,
+			"name":    p.Name,
+			"alive":   p.Alive,
+		})
+	}
+
+	var role string
+	for _, p := range r.Game.Players {
+		if p.UserID == client.UserID {
+			role = p.Role.String()
+			break
+		}
+	}
+
+	result := map[string]interface{}{
+		"action": "game_started",
+		"sender": "system",
+		"content": map[string]interface{}{
+			"your_role": role,
+			"players":   playerList,
+		},
+	}
+	data, _ := json.Marshal(result)
+	select {
+	case client.Send <- data:
+	default:
+	}
+
+	if r.Game.Phase == PhaseAnswer || r.Game.Phase == PhaseQuestion {
+		phaseResult := map[string]interface{}{
+			"action": "phase_change",
+			"sender": "system",
+			"content": map[string]interface{}{
+				"phase":     r.Game.Phase.String(),
+				"round":     r.Game.Round,
+				"timeout_s": 60,
+			},
+		}
+		phaseData, _ := json.Marshal(phaseResult)
+		select {
+		case client.Send <- phaseData:
+		default:
+		}
+	}
+
+	if r.Game.Question != "" {
+		qResult := map[string]interface{}{
+			"action": "question",
+			"sender": "system",
+			"content": map[string]interface{}{
+				"round":    r.Game.Round,
+				"question": r.Game.Question,
+			},
+		}
+		qData, _ := json.Marshal(qResult)
+		select {
+		case client.Send <- qData:
+		default:
+		}
+	}
+}
+
+func (r *Room) broadcastGameAction(action string, content interface{}) {
+	msg := Message{
+		Action: action,
+		Sender: "system",
+	}
+	data, _ := json.Marshal(msg)
+	full := make(map[string]interface{})
+	json.Unmarshal(data, &full)
+	full["content"] = content
+	final, err := json.Marshal(full)
+	if err != nil {
+		return
+	}
+
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	for client := range r.Clients {
+		select {
+		case client.Send <- final:
+		default:
+		}
+	}
+}
+
+func (r *Room) broadcastSystem(msg Message) {
+	data, err := json.Marshal(msg)
+	if err != nil {
+		return
+	}
+	for client := range r.Clients {
+		select {
+		case client.Send <- data:
+		default:
+		}
+	}
+}
+
+func (r *Room) buildVoteData() map[int64]int {
+	result := make(map[int64]int)
+	if r.Game.Round-1 >= 0 && r.Game.Round-1 < len(r.Game.RoundLogs) {
+		roundLog := r.Game.RoundLogs[r.Game.Round-1]
+		for _, targetID := range roundLog.Votes {
+			result[targetID]++
+		}
+	}
+	return result
+}
+
+// ---- Room lifecycle ----
+
 func (r *Room) Run() {
 	idleTimer := time.NewTimer(10 * time.Minute)
 	defer idleTimer.Stop()
+
+	reconnectTimer := time.NewTimer(reconnectGrace)
+	reconnectTimer.Stop()
 
 	for {
 		select {
 		case client := <-r.Register:
 			r.mu.Lock()
-			r.Clients[client] = true
-			count := len(r.Clients)
-			r.mu.Unlock()
+			isReconnect := r.handleRegister(client)
+			if isReconnect {
+				r.mu.Unlock()
+			} else {
+				r.Clients[client] = true
+				count := len(r.Clients)
+				r.mu.Unlock()
 
-			r.broadcastSystem(Message{
-				Action: "player_joined",
-				Sender: client.Name,
-			})
-			r.log.Infof("房间 [%s] 玩家 %s 加入, 当前 %d 人", r.ID, client.Name, count)
+				r.broadcastSystem(Message{
+					Action: "player_joined",
+					Sender: client.Name,
+				})
+				r.log.Infof("room [%s] player %s joined, %d total", r.ID, client.Name, count)
+			}
+
+			r.mu.RLock()
+			allConnected := r.checkAllConnected()
+			r.mu.RUnlock()
+			if allConnected {
+				r.mu.Lock()
+				if r.Game == nil {
+					r.loadOrCreateGame()
+				}
+				if r.Game != nil && r.Game.Phase == PhaseWaiting {
+					r.startGame()
+				}
+				r.mu.Unlock()
+			}
 
 		case client := <-r.Unregister:
 			r.mu.Lock()
@@ -144,17 +640,42 @@ func (r *Room) Run() {
 				delete(r.Clients, client)
 				close(client.Send)
 			}
+			r.handleDisconnect(client)
 			count := len(r.Clients)
 			r.mu.Unlock()
 
-			r.broadcastSystem(Message{
-				Action: "player_left",
-				Sender: client.Name,
-			})
-			r.log.Infof("房间 [%s] 玩家 %s 离开, 当前 %d 人", r.ID, client.Name, count)
+			r.log.Infof("room [%s] player %s left, %d total", r.ID, client.Name, count)
 
 			if count == 0 {
-				idleTimer.Reset(10 * time.Minute)
+				r.mu.RLock()
+				gameActive := r.Game != nil && r.Game.Phase != PhaseEnd
+				r.mu.RUnlock()
+				if gameActive {
+					reconnectTimer.Reset(reconnectGrace)
+				} else {
+					reconnectTimer.Reset(10 * time.Minute)
+				}
+			}
+
+		case <-reconnectTimer.C:
+			r.mu.RLock()
+			count := len(r.Clients)
+			gameActive := r.Game != nil && r.Game.Phase != PhaseEnd
+			r.mu.RUnlock()
+			if count == 0 {
+				if gameActive {
+					r.mu.Lock()
+					if r.Game != nil && r.Game.Phase != PhaseEnd {
+						r.endGame("AI")
+						r.mu.Unlock()
+					} else {
+						r.mu.Unlock()
+					}
+				} else {
+					r.log.Infof("room [%s] idle timeout, destroying", r.ID)
+					r.manager.RemoveRoom(r.ID)
+					return
+				}
 			}
 
 		case <-idleTimer.C:
@@ -162,7 +683,7 @@ func (r *Room) Run() {
 			count := len(r.Clients)
 			r.mu.RUnlock()
 			if count == 0 {
-				r.log.Infof("房间 [%s] 空闲超时，即将销毁", r.ID)
+				r.log.Infof("room [%s] idle timeout, destroying", r.ID)
 				r.manager.RemoveRoom(r.ID)
 				return
 			}
@@ -187,79 +708,112 @@ func (r *Room) Run() {
 	}
 }
 
-func (r *Room) broadcastSystem(msg Message) {
-	data, err := json.Marshal(msg)
-	if err != nil {
+func (r *Room) handleRegister(client *Client) bool {
+	if r.Game == nil {
+		return false
+	}
+
+	for _, p := range r.Game.Players {
+		if p.UserID == client.UserID {
+			p.ConnID = client.ID
+			r.Clients[client] = true
+			r.log.Infof("player %s reconnected to room %s", client.Name, r.ID)
+
+			go func() {
+				time.Sleep(100 * time.Millisecond)
+				r.syncGameStateTo(client)
+			}()
+			return true
+		}
+	}
+	return false
+}
+
+func (r *Room) handleDisconnect(client *Client) {
+	if r.Game == nil {
 		return
 	}
-	for client := range r.Clients {
-		select {
-		case client.Send <- data:
-		default:
+
+	for _, p := range r.Game.Players {
+		if p.UserID == client.UserID {
+			p.ConnID = ""
+			r.log.Infof("player %s disconnected from game in room %s", p.Name, r.ID)
+
+			for client2 := range r.Clients {
+				if client2.UserID == client.UserID && client2 != client {
+					return
+				}
+			}
+			return
 		}
 	}
 }
 
-var upgrader = websocket.Upgrader{
-	HandshakeTimeout: 5 * time.Second,
-	ReadBufferSize:   1024,
-	WriteBufferSize:  1024,
-	CheckOrigin: func(r *http.Request) bool {
-		return true
-	},
-}
-
-type RoomManager struct {
-	rooms map[string]*Room
-	mu    sync.RWMutex
-	log   *log.Helper
-}
-
-func NewRoomManager(logger log.Logger) *RoomManager {
-	return &RoomManager{
-		rooms: make(map[string]*Room),
-		log:   log.NewHelper(logger),
+func (r *Room) checkAllConnected() bool {
+	if r.Game == nil {
+		return len(r.Clients) >= maxPlayers
 	}
+
+	connected := 0
+	for _, p := range r.Game.Players {
+		if p.Role == RoleAI {
+			connected++
+			continue
+		}
+		if p.ConnID != "" {
+			connected++
+		}
+	}
+
+	return connected >= maxPlayers
 }
 
-func (rm *RoomManager) HandleWS(w http.ResponseWriter, r *http.Request, roomID string, userID string, userName string) error {
-	conn, err := upgrader.Upgrade(w, r, nil)
+func (r *Room) loadOrCreateGame() {
+	ctx := context.Background()
+	session, err := r.gameRepo.LoadSession(ctx, r.ID)
 	if err != nil {
-		rm.log.Errorf("websocket 升级失败: %v", err)
-		return err
+		r.log.Errorf("load game session failed: %v", err)
+	}
+	if session != nil {
+		session.mu = sync.RWMutex{}
+		session.StopCh = make(chan struct{})
+		r.Game = session
+
+		for _, p := range r.Game.Players {
+			p.ConnID = ""
+			for client := range r.Clients {
+				if client.UserID == p.UserID {
+					p.ConnID = client.ID
+					break
+				}
+			}
+			if p.Role == RoleAI {
+				p.ConnID = "AI"
+			}
+		}
+		return
 	}
 
-	rm.mu.Lock()
-	room, exists := rm.rooms[roomID]
-	if !exists {
-		room = NewRoom(roomID, rm)
-		rm.rooms[roomID] = room
-		go room.Run()
+	playerIDs := make([]int64, 0, len(r.Clients))
+	names := make(map[int64]string)
+	for client := range r.Clients {
+		playerIDs = append(playerIDs, client.UserID)
+		names[client.UserID] = client.Name
 	}
-	rm.mu.Unlock()
 
-	client := &Client{
-		ID:   userID,
-		Name: userName,
-		Conn: conn,
-		Room: room,
-		Send: make(chan []byte, 256),
-		log:  rm.log,
+	if len(playerIDs) < maxPlayers {
+		return
 	}
-	room.Register <- client
 
-	go client.WritePump()
-	go client.ReadPump()
+	r.Game = r.gameUsecase.NewGameSession(r.ID, playerIDs, names)
+	r.Game.StopCh = make(chan struct{})
 
-	return nil
-}
-
-func (rm *RoomManager) RemoveRoom(roomID string) {
-	rm.mu.Lock()
-	defer rm.mu.Unlock()
-	if room, ok := rm.rooms[roomID]; ok {
-		close(room.idleDone)
+	for _, p := range r.Game.Players {
+		for client := range r.Clients {
+			if client.UserID == p.UserID {
+				p.ConnID = client.ID
+				break
+			}
+		}
 	}
-	delete(rm.rooms, roomID)
-	rm.log.Infof("房间 [%s] 已销毁", roomID)
 }
