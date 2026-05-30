@@ -1,0 +1,248 @@
+:root {
+  color-scheme: light;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: #fff;
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 36px;
+  transform: translateX(-50%);
+  z-index: 20;
+
+  max-width: min(560px, calc(100vw - 32px));
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.78);
+  color: #fff;
+  font: 600 14px/1.3 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+  text-align: center;
+  pointer-events: none;
+}
+
+.page {
+  height: 100%;
+  overflow: hidden;
+}
+
+.art {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: none;
+}
+
+/* Login layout: keep SVG at 1920x1080, scale to fit viewport, then overlay fields in SVG pixels. */
+.frame {
+  height: 100%;
+  display: grid;
+  place-items: center;
+}
+
+.canvas {
+  position: relative;
+  width: min(100vw, calc(100vh * (1920 / 1080)));
+  aspect-ratio: 1920 / 1080;
+}
+
+.bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: none;
+}
+
+.loginField {
+  position: absolute;
+  left: calc(71 / 1920 * 100%);
+  width: calc(739 / 1920 * 100%);
+  height: calc(94 / 1080 * 100%);
+
+  /* shift relative to the field itself */
+  transform: translate(31%, 110%);
+
+  border-radius: 25px;
+  opacity: 1;
+
+  box-sizing: border-box;
+  border: none;
+  background: transparent;
+  color: #111;
+  padding: 0 22px;
+  font: 600 28px/1.1 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+  outline: none;
+}
+
+.loginField::placeholder {
+  color: rgba(0, 0, 0, 0.45);
+  font-weight: 500;
+}
+
+.loginField:focus {
+  background: transparent;
+}
+
+.loginFieldUser {
+  top: calc(328 / 1080 * 100%);
+}
+
+.loginFieldPass {
+  top: calc(470 / 1080 * 100%);
+}
+
+.loginBtn {
+  position: absolute;
+  left: calc(71 / 1920 * 100%);
+  top: calc(612 / 1080 * 100%);
+  width: calc(739 / 1920 * 100%);
+  height: calc(94 / 1080 * 100%);
+
+  /* match inputs */
+  transform: translate(30%, 140%);
+  border-radius: 25px;
+  opacity: 1;
+
+  box-sizing: border-box;
+  border: none;
+  background: transparent;
+  padding: 0 22px;
+  color: rgba(0, 0, 0, 0.55);
+  font: 700 30px/1 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+  text-align: center;
+  cursor: pointer;
+}
+
+.loginBtn:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.loginBtn:hover {
+  color: rgba(0, 0, 0, 0.7);
+}
+
+.loginBtn:active {
+  opacity: 0.85;
+}
+
+.loginBtn:focus-visible {
+  outline: none;
+}
+
+.registerBtn {
+  position: absolute;
+  left: calc(640 / 1920 * 100%);
+  top: calc(860 / 1080 * 100%);
+
+  width: 50px;
+  height: 30px;
+  transform: translate(0%, 0%);
+
+  box-sizing: border-box;
+  border: 0px solid rgba(0, 0, 0, 0.35);
+  border-radius: 4px;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+}
+
+.registerBtn:hover {
+  border-color: rgba(0, 0, 0, 0.55);
+}
+
+.registerBtn:active {
+  opacity: 0.85;
+}
+
+.registerBtn:focus-visible {
+  outline: none;
+}
+
+/* Register page: align with current login overlay geometry. */
+.registerOverlay {
+  position: absolute;
+  inset: 0;
+  transform: translateY(-60px);
+}
+
+.registerFieldUser {
+  top: calc(328 / 1080 * 100%);
+}
+
+.registerFieldPass {
+  top: calc(470 / 1080 * 100%);
+}
+
+.registerFieldPass2 {
+  top: calc(612 / 1080 * 100%);
+}
+
+.registerSubmit {
+  position: absolute;
+  left: calc(71 / 1920 * 100%);
+  top: calc(754 / 1080 * 100%);
+  width: calc(739 / 1920 * 100%);
+  height: calc(94 / 1080 * 100%);
+
+  transform: translate(30%, 150%);
+  border-radius: 25px;
+  opacity: 1;
+
+  box-sizing: border-box;
+  border: none;
+  background: transparent;
+  padding: 0 22px;
+  color: rgba(0, 0, 0, 0.55);
+  font: 700 30px/1 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+  text-align: center;
+  cursor: pointer;
+}
+
+.registerSubmit:hover {
+  color: rgba(0, 0, 0, 0.7);
+}
+
+.registerSubmit:active {
+  opacity: 0.85;
+}
+
+.registerSubmit:focus-visible {
+  outline: none;
+}
+
+.registerSubmit:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.game {
+  height: 100%;
+  background: #0f0f10;
+  color: #eaeaea;
+  font: 700 48px/1.1 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial,
+    "Apple Color Emoji", "Segoe UI Emoji";
+  display: grid;
+  place-items: center;
+}
+
+.gameInner {
+  letter-spacing: 0.12em;
+  opacity: 0.9;
+}
