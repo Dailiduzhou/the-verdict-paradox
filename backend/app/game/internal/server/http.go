@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 
+	gamev1 "github.com/Dailiduzhou/the-verdict-paradox/backend/api/game/v1"
 	userv1 "github.com/Dailiduzhou/the-verdict-paradox/backend/api/user/v1"
 	"github.com/Dailiduzhou/the-verdict-paradox/backend/app/game/internal/biz"
 	"github.com/Dailiduzhou/the-verdict-paradox/backend/app/game/internal/conf"
@@ -26,7 +27,7 @@ var publicOps = map[string]bool{
 }
 
 // NewHTTPServer new an HTTP server.
-func NewHTTPServer(c *conf.Server, user *service.UserService, authUc *biz.AuthUsecase, ac *conf.Auth, logger log.Logger) *http.Server {
+func NewHTTPServer(c *conf.Server, user *service.UserService, game *service.GameService, authUc *biz.AuthUsecase, ac *conf.Auth, logger log.Logger) *http.Server {
 	jwtMiddleware := kratosjwt.Server(
 		func(t *jwtv5.Token) (any, error) {
 			return []byte(ac.AccessTokenSecret), nil
@@ -63,5 +64,6 @@ func NewHTTPServer(c *conf.Server, user *service.UserService, authUc *biz.AuthUs
 	}
 	srv := http.NewServer(opts...)
 	userv1.RegisterUserHTTPServer(srv, user)
+	gamev1.RegisterGameHTTPServer(srv, game)
 	return srv
 }

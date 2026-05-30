@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 
+	gamev1 "github.com/Dailiduzhou/the-verdict-paradox/backend/api/game/v1"
 	userv1 "github.com/Dailiduzhou/the-verdict-paradox/backend/api/user/v1"
 	"github.com/Dailiduzhou/the-verdict-paradox/backend/app/game/internal/biz"
 	"github.com/Dailiduzhou/the-verdict-paradox/backend/app/game/internal/conf"
@@ -19,7 +20,7 @@ import (
 )
 
 // NewGRPCServer new a gRPC server.
-func NewGRPCServer(c *conf.Server, user *service.UserService, authUc *biz.AuthUsecase, ac *conf.Auth, logger log.Logger) *grpc.Server {
+func NewGRPCServer(c *conf.Server, user *service.UserService, game *service.GameService, authUc *biz.AuthUsecase, ac *conf.Auth, logger log.Logger) *grpc.Server {
 	jwtMiddleware := kratosjwt.Server(
 		func(t *jwtv5.Token) (any, error) {
 			return []byte(ac.AccessTokenSecret), nil
@@ -55,5 +56,6 @@ func NewGRPCServer(c *conf.Server, user *service.UserService, authUc *biz.AuthUs
 	}
 	srv := grpc.NewServer(opts...)
 	userv1.RegisterUserServer(srv, user)
+	gamev1.RegisterGameServer(srv, game)
 	return srv
 }
