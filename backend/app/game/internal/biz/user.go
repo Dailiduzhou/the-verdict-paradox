@@ -5,6 +5,8 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/Dailiduzhou/the-verdict-paradox/backend/app/game/internal/conf"
@@ -42,7 +44,29 @@ func NewUserUsecase(userRepo UserRepo, logger log.Logger) *UserUsecase {
 	}
 }
 
+var namePattern = regexp.MustCompile(`^[a-zA-Z0-9_\p{Han}]+$`)
+
 func (uc *UserUsecase) Register(ctx context.Context, name, password string) (*User, error) {
+	name = strings.TrimSpace(name)
+	password = strings.TrimSpace(password)
+	if name == "" {
+		return nil, errors.BadRequest("EMPTY_NAME", "name is required")
+	}
+	if len(name) < 2 || len(name) > 50 {
+		return nil, errors.BadRequest("INVALID_NAME", "name must be 2-50 characters")
+	}
+	if !namePattern.MatchString(name) {
+		return nil, errors.BadRequest("INVALID_NAME", "name contains invalid characters")
+	}
+	if password == "" {
+		return nil, errors.BadRequest("EMPTY_PASSWORD", "password is required")
+	}
+	if len(password) < 6 {
+		return nil, errors.BadRequest("WEAK_PASSWORD", "password must be at least 6 characters")
+	}
+	if len(password) > 72 {
+		return nil, errors.BadRequest("WEAK_PASSWORD", "password must be at most 72 characters")
+	}
 	return uc.userRepo.CreateUser(ctx, name, password)
 }
 

@@ -14,6 +14,7 @@ import (
 	"github.com/go-kratos/kratos/v2/errors"
 	"github.com/go-kratos/kratos/v2/log"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -77,7 +78,11 @@ func (r *UserRepo) CreateUser(ctx context.Context, name, password string) (*biz.
 		PasswordHash: hashedPwd,
 	})
 	if err != nil {
-		return nil, errors.InternalServer("DB_ERROR", "fail to create user")
+		var pgErr *pgconn.PgError
+		if stderrors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return nil, errors.Conflict("USER_EXISTS", fmt.Sprintf("user %s already exists", name))
+		}
+		return nil, errors.InternalServer("DB_ERROR", "failed to create user")
 	}
 
 	return toBizUser(user), nil
