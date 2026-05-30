@@ -40,6 +40,12 @@ service User {
       body: "*"
     };
   }
+  rpc Verify(VerifyRequest) returns (VerifyReply) {
+    option (google.api.http) = {
+      post: "/v1/users/verify"
+      body: "*"
+    };
+  }
 }
 
 message RegisterRequest {
@@ -65,8 +71,7 @@ message GetUserRequest {
 
 message UpdateUserRequest {
   int64 id = 1;
-  string nickname = 2;
-  string real_name = 3;
+  string name = 2;
 }
 
 message DeleteUserRequest {
@@ -87,4 +92,12 @@ message RefreshRequest {
 message RefreshReply {
   string access_token = 1;
   string refresh_token = 2;
+}
+
+message VerifyRequest {
+  string token = 1;
+}
+
+message VerifyReply {
+  bool valid = 1;
 }

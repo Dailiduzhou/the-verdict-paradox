@@ -25,6 +25,7 @@ const OperationUserLogin = "/api.user.v1.User/Login"
 const OperationUserRefreshToken = "/api.user.v1.User/RefreshToken"
 const OperationUserRegister = "/api.user.v1.User/Register"
 const OperationUserUpdateUser = "/api.user.v1.User/UpdateUser"
+const OperationUserVerify = "/api.user.v1.User/Verify"
 
 type UserHTTPServer interface {
 	DeleteUser(context.Context, *DeleteUserRequest) (*DeleteUserReply, error)
@@ -33,6 +34,7 @@ type UserHTTPServer interface {
 	RefreshToken(context.Context, *RefreshRequest) (*RefreshReply, error)
 	Register(context.Context, *RegisterRequest) (*RegisterReply, error)
 	UpdateUser(context.Context, *UpdateUserRequest) (*UserInfo, error)
+	Verify(context.Context, *VerifyRequest) (*VerifyReply, error)
 }
 
 func RegisterUserHTTPServer(s *http.Server, srv UserHTTPServer) {
@@ -43,6 +45,7 @@ func RegisterUserHTTPServer(s *http.Server, srv UserHTTPServer) {
 	r.PUT("/v1/users/{id}", _User_UpdateUser0_HTTP_Handler(srv))
 	r.DELETE("/v1/users/{id}", _User_DeleteUser0_HTTP_Handler(srv))
 	r.POST("/v1/users/refresh", _User_RefreshToken0_HTTP_Handler(srv))
+	r.POST("/v1/users/verify", _User_Verify0_HTTP_Handler(srv))
 }
 
 func _User_Register0_HTTP_Handler(srv UserHTTPServer) func(ctx http.Context) error {
@@ -180,6 +183,28 @@ func _User_RefreshToken0_HTTP_Handler(srv UserHTTPServer) func(ctx http.Context)
 	}
 }
 
+func _User_Verify0_HTTP_Handler(srv UserHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in VerifyRequest
+		if err := ctx.Bind(&in); err != nil {
+			return err
+		}
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationUserVerify)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.Verify(ctx, req.(*VerifyRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*VerifyReply)
+		return ctx.Result(200, reply)
+	}
+}
+
 type UserHTTPClient interface {
 	DeleteUser(ctx context.Context, req *DeleteUserRequest, opts ...http.CallOption) (rsp *DeleteUserReply, err error)
 	GetUser(ctx context.Context, req *GetUserRequest, opts ...http.CallOption) (rsp *UserInfo, err error)
@@ -187,6 +212,7 @@ type UserHTTPClient interface {
 	RefreshToken(ctx context.Context, req *RefreshRequest, opts ...http.CallOption) (rsp *RefreshReply, err error)
 	Register(ctx context.Context, req *RegisterRequest, opts ...http.CallOption) (rsp *RegisterReply, err error)
 	UpdateUser(ctx context.Context, req *UpdateUserRequest, opts ...http.CallOption) (rsp *UserInfo, err error)
+	Verify(ctx context.Context, req *VerifyRequest, opts ...http.CallOption) (rsp *VerifyReply, err error)
 }
 
 type UserHTTPClientImpl struct {
@@ -269,6 +295,19 @@ func (c *UserHTTPClientImpl) UpdateUser(ctx context.Context, in *UpdateUserReque
 	opts = append(opts, http.Operation(OperationUserUpdateUser))
 	opts = append(opts, http.PathTemplate(pattern))
 	err := c.cc.Invoke(ctx, "PUT", path, in, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func (c *UserHTTPClientImpl) Verify(ctx context.Context, in *VerifyRequest, opts ...http.CallOption) (*VerifyReply, error) {
+	var out VerifyReply
+	pattern := "/v1/users/verify"
+	path := binding.EncodeURL(pattern, in, false)
+	opts = append(opts, http.Operation(OperationUserVerify))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "POST", path, in, &out, opts...)
 	if err != nil {
 		return nil, err
 	}

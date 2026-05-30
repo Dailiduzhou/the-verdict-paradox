@@ -53,7 +53,7 @@ func (s *UserService) GetUser(ctx context.Context, req *pb.GetUserRequest) (*pb.
 }
 
 func (s *UserService) UpdateUser(ctx context.Context, req *pb.UpdateUserRequest) (*pb.UserInfo, error) {
-	user, err := s.userUc.UpdateUser(ctx, req.Id, req.Nickname)
+	user, err := s.userUc.UpdateUser(ctx, req.Id, req.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -80,4 +80,12 @@ func (s *UserService) RefreshToken(ctx context.Context, req *pb.RefreshRequest) 
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 	}, nil
+}
+
+func (s *UserService) Verify(ctx context.Context, req *pb.VerifyRequest) (*pb.VerifyReply, error) {
+	_, err := s.authUc.VerifyToken(ctx, req.Token)
+	if err != nil {
+		return &pb.VerifyReply{Valid: false}, nil
+	}
+	return &pb.VerifyReply{Valid: true}, nil
 }

@@ -78,6 +78,30 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/Status'
+    /v1/users/verify:
+        post:
+            tags:
+                - User
+            operationId: User_Verify
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/VerifyRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/VerifyReply'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
     /v1/users/{id}:
         get:
             tags:
@@ -226,9 +250,7 @@ components:
             properties:
                 id:
                     type: string
-                nickname:
-                    type: string
-                realName:
+                name:
                     type: string
         UserInfo:
             type: object
@@ -240,5 +262,15 @@ components:
                 createdAt:
                     type: string
                     format: date-time
+        VerifyReply:
+            type: object
+            properties:
+                valid:
+                    type: boolean
+        VerifyRequest:
+            type: object
+            properties:
+                token:
+                    type: string
 tags:
     - name: User
