@@ -17,9 +17,10 @@ import (
 
 // ProviderSet is data providers.
 var ProviderSet = wire.NewSet(
-	NewPgxPool, NewData, NewRedisClient, NewAuthRepo, NewUserRepo,
+	NewPgxPool, NewData, NewRedisClient, NewAuthRepo, NewUserRepo, NewMatchRepo,
 	wire.Bind(new(biz.AuthRepo), new(*AuthRepo)),
 	wire.Bind(new(biz.UserRepo), new(*UserRepo)),
+	wire.Bind(new(biz.MatchRepo), new(*MatchRepo)),
 )
 
 // Data .
