@@ -34,6 +34,12 @@ service User {
   rpc DeleteUser(DeleteUserRequest) returns (DeleteUserReply) {
     option (google.api.http) = {delete: "/v1/users/{id}"};
   }
+  rpc RefreshToken(RefreshRequest) returns (RefreshReply) {
+    option (google.api.http) = {
+      post: "/v1/users/refresh"
+      body: "*"
+    };
+  }
 }
 
 message RegisterRequest {
@@ -74,3 +80,11 @@ message UserInfo {
   google.protobuf.Timestamp created_at = 3;
 }
 
+message RefreshRequest {
+  string refresh_token = 1;
+}
+
+message RefreshReply {
+  string access_token = 1;
+  string refresh_token = 2;
+}
