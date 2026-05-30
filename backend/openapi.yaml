@@ -93,6 +93,8 @@ components:
             properties:
                 status:
                     type: string
+                roomID:
+                    type: string
         GoogleProtobufAny:
             type: object
             properties:
