@@ -1,0 +1,49 @@
+syntax = "proto3";
+
+package api.game.v1;
+
+import "google/api/annotations.proto";
+
+option go_package = "github.com/Dailiduzhou/the-verdict-paradox/backend/api/game/v1;v1";
+option java_multiple_files = true;
+option java_package = "api.game.v1";
+service Game {
+  rpc StartMatch(StartMatchRequest) returns (StartMatchReply) {
+    option (google.api.http) = {
+      post: "/v1/game/start"
+      body: "*"
+    };
+  }
+  rpc CancelMatch(CancelMatchRequest) returns (CancelMatchReply) {
+    option (google.api.http) = {
+      post: "/v1/game/cancel"
+      body: "*"
+    };
+  }
+  rpc GetMatchStatus(GetMatchStatusRequest) returns (GetMatchStatusReply) {
+    option (google.api.http) = {get: "/v1/game/status/{matchid}"};
+  }
+}
+
+message StartMatchRequest {
+  string name = 1;
+}
+
+message StartMatchReply {
+  string matchID = 1;
+}
+
+message CancelMatchRequest {
+  string name = 1;
+}
+
+message CancelMatchReply {}
+
+message GetMatchStatusRequest {
+  string matchid = 1;
+}
+
+message GetMatchStatusReply {
+  string status = 1;
+}
+
