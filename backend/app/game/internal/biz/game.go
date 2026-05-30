@@ -235,15 +235,14 @@ func (uc *GameUsecase) CheckWinCondition(session *GameSession) (gameOver bool, w
 	}
 
 	if !spyAlive {
-		return true, "HUMAN"
+		return true, "SPY"
 	}
 	if humanAlive == 0 {
-		return true, "AI"
+		return true, "SPY"
 	}
 	if aiAlive == 0 {
 		return true, "HUMAN"
 	}
-
 	return false, ""
 }
 
