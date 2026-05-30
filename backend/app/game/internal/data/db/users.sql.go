@@ -76,20 +76,20 @@ func (q *Queries) GetUserByName(ctx context.Context, name string) (User, error) 
 	return i, err
 }
 
-const updateUser = `-- name: UpdateUser :one
+const updateUserInfo = `-- name: UpdateUserInfo :one
 UPDATE users
 SET name = $2, updated_at = CURRENT_TIMESTAMP
 WHERE id = $1
 RETURNING id, name, password_hash, created_at, updated_at
 `
 
-type UpdateUserParams struct {
+type UpdateUserInfoParams struct {
 	ID   int64
 	Name string
 }
 
-func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error) {
-	row := q.db.QueryRow(ctx, updateUser, arg.ID, arg.Name)
+func (q *Queries) UpdateUserInfo(ctx context.Context, arg UpdateUserInfoParams) (User, error) {
+	row := q.db.QueryRow(ctx, updateUserInfo, arg.ID, arg.Name)
 	var i User
 	err := row.Scan(
 		&i.ID,
@@ -102,6 +102,7 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, e
 }
 
 const updateUserPassword = `-- name: UpdateUserPassword :exec
+
 UPDATE users SET password_hash = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $1
 `
 
@@ -110,6 +111,10 @@ type UpdateUserPasswordParams struct {
 	PasswordHash string
 }
 
+// UPDATE users
+// SET state = $2, updated_at = CURRENT_TIMESTAMP
+// WHERE id = $1
+// RETURNING *;
 func (q *Queries) UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error {
 	_, err := q.db.Exec(ctx, updateUserPassword, arg.ID, arg.PasswordHash)
 	return err

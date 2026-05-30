@@ -23,18 +23,41 @@ import (
 // Injectors from wire.go:
 
 // wireApp init kratos application.
-func wireApp(confServer *conf.Server, confData *conf.Data, logger log.Logger) (*kratos.App, func(), error) {
-	dataData, cleanup, err := data.NewData(confData)
+func wireApp(confServer *conf.Server, confData *conf.Data, auth *conf.Auth, logger log.Logger) (*kratos.App, func(), error) {
+	pool, cleanup, err := data.NewPgxPool(confData)
 	if err != nil {
 		return nil, nil, err
 	}
-	greeterRepo := data.NewGreeterRepo(dataData, logger)
-	greeterUsecase := biz.NewGreeterUsecase(greeterRepo)
-	greeterService := service.NewGreeterService(greeterUsecase)
-	grpcServer := server.NewGRPCServer(confServer, greeterService, logger)
-	httpServer := server.NewHTTPServer(confServer, greeterService, logger)
-	app := newApp(logger, grpcServer, httpServer)
+	client, cleanup2, err := data.NewRedisClient(confData)
+	if err != nil {
+		cleanup()
+		return nil, nil, err
+	}
+	dataData, cleanup3, err := data.NewData(pool, client)
+	if err != nil {
+		cleanup2()
+		cleanup()
+		return nil, nil, err
+	}
+	userRepo := data.NewUserRepo(dataData, logger)
+	authRepo := data.NewAuthRepo(client, logger)
+	authUsecase := biz.NewAuthUsecase(userRepo, authRepo, auth)
+	userUsecase := biz.NewUserUsecase(userRepo, logger)
+	userService := service.NewUserService(authUsecase, userUsecase, logger)
+	matchRepo := data.NewMatchRepo(client, logger)
+	gameService := service.NewGameService(userRepo, matchRepo, logger)
+	grpcServer := server.NewGRPCServer(confServer, userService, gameService, authUsecase, auth, logger)
+	gameRepo := data.NewGameRepo(client, logger)
+	llmClient := data.NewOpenAIClient(logger)
+	gameUsecase := biz.NewGameUsecase(gameRepo, llmClient, logger)
+	roomManager := biz.NewRoomManager(logger, gameUsecase, gameRepo, llmClient)
+	httpServer := server.NewHTTPServer(confServer, userService, gameService, authUsecase, auth, roomManager, logger)
+	matchUsecase := biz.NewMatchUsecase(matchRepo, logger)
+	matchServer := server.NewMatchServer(matchUsecase, logger)
+	app := newApp(logger, grpcServer, httpServer, matchServer)
 	return app, func() {
+		cleanup3()
+		cleanup2()
 		cleanup()
 	}, nil
 }

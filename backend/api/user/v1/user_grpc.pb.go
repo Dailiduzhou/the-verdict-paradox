@@ -25,6 +25,7 @@ const (
 	User_UpdateUser_FullMethodName   = "/api.user.v1.User/UpdateUser"
 	User_DeleteUser_FullMethodName   = "/api.user.v1.User/DeleteUser"
 	User_RefreshToken_FullMethodName = "/api.user.v1.User/RefreshToken"
+	User_Verify_FullMethodName       = "/api.user.v1.User/Verify"
 )
 
 // UserClient is the client API for User service.
@@ -37,6 +38,7 @@ type UserClient interface {
 	UpdateUser(ctx context.Context, in *UpdateUserRequest, opts ...grpc.CallOption) (*UserInfo, error)
 	DeleteUser(ctx context.Context, in *DeleteUserRequest, opts ...grpc.CallOption) (*DeleteUserReply, error)
 	RefreshToken(ctx context.Context, in *RefreshRequest, opts ...grpc.CallOption) (*RefreshReply, error)
+	Verify(ctx context.Context, in *VerifyRequest, opts ...grpc.CallOption) (*VerifyReply, error)
 }
 
 type userClient struct {
@@ -107,6 +109,16 @@ func (c *userClient) RefreshToken(ctx context.Context, in *RefreshRequest, opts 
 	return out, nil
 }
 
+func (c *userClient) Verify(ctx context.Context, in *VerifyRequest, opts ...grpc.CallOption) (*VerifyReply, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(VerifyReply)
+	err := c.cc.Invoke(ctx, User_Verify_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // UserServer is the server API for User service.
 // All implementations must embed UnimplementedUserServer
 // for forward compatibility.
@@ -117,6 +129,7 @@ type UserServer interface {
 	UpdateUser(context.Context, *UpdateUserRequest) (*UserInfo, error)
 	DeleteUser(context.Context, *DeleteUserRequest) (*DeleteUserReply, error)
 	RefreshToken(context.Context, *RefreshRequest) (*RefreshReply, error)
+	Verify(context.Context, *VerifyRequest) (*VerifyReply, error)
 	mustEmbedUnimplementedUserServer()
 }
 
@@ -144,6 +157,9 @@ func (UnimplementedUserServer) DeleteUser(context.Context, *DeleteUserRequest) (
 }
 func (UnimplementedUserServer) RefreshToken(context.Context, *RefreshRequest) (*RefreshReply, error) {
 	return nil, status.Error(codes.Unimplemented, "method RefreshToken not implemented")
+}
+func (UnimplementedUserServer) Verify(context.Context, *VerifyRequest) (*VerifyReply, error) {
+	return nil, status.Error(codes.Unimplemented, "method Verify not implemented")
 }
 func (UnimplementedUserServer) mustEmbedUnimplementedUserServer() {}
 func (UnimplementedUserServer) testEmbeddedByValue()              {}
@@ -274,6 +290,24 @@ func _User_RefreshToken_Handler(srv interface{}, ctx context.Context, dec func(i
 	return interceptor(ctx, in, info, handler)
 }
 
+func _User_Verify_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(VerifyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(UserServer).Verify(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: User_Verify_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(UserServer).Verify(ctx, req.(*VerifyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // User_ServiceDesc is the grpc.ServiceDesc for User service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -304,6 +338,10 @@ var User_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RefreshToken",
 			Handler:    _User_RefreshToken_Handler,
+		},
+		{
+			MethodName: "Verify",
+			Handler:    _User_Verify_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
