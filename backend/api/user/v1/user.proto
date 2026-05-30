@@ -1,0 +1,76 @@
+syntax = "proto3";
+
+package api.user.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/Dailiduzhou/the-verdict-paradox/backend/api/user/v1;v1";
+option java_multiple_files = true;
+option java_package = "api.user.v1";
+
+service User {
+  rpc Register(RegisterRequest) returns (RegisterReply) {
+    option (google.api.http) = {
+      post: "/v1/users/register"
+      body: "*"
+    };
+  }
+  rpc Login(LoginRequest) returns (LoginReply) {
+    option (google.api.http) = {
+      post: "/v1/users/login"
+      body: "*"
+    };
+  }
+  rpc GetUser(GetUserRequest) returns (UserInfo) {
+    option (google.api.http) = {get: "/v1/users/{id}"};
+  }
+  rpc UpdateUser(UpdateUserRequest) returns (UserInfo) {
+    option (google.api.http) = {
+      put: "/v1/users/{id}"
+      body: "*"
+    };
+  }
+  rpc DeleteUser(DeleteUserRequest) returns (DeleteUserReply) {
+    option (google.api.http) = {delete: "/v1/users/{id}"};
+  }
+}
+
+message RegisterRequest {
+  string name = 1;
+  string password = 2;
+}
+message RegisterReply {
+  int64 id = 1;
+}
+
+message LoginRequest {
+  string phone = 1;
+  string password = 2;
+}
+message LoginReply {
+  int64 id = 1;
+  string token = 2;
+}
+
+message GetUserRequest {
+  int64 id = 1;
+}
+
+message UpdateUserRequest {
+  int64 id = 1;
+  string nickname = 2;
+  string real_name = 3;
+}
+
+message DeleteUserRequest {
+  int64 id = 1;
+}
+message DeleteUserReply {}
+
+message UserInfo {
+  int64 id = 1;
+  string name = 2;
+  google.protobuf.Timestamp created_at = 3;
+}
+
