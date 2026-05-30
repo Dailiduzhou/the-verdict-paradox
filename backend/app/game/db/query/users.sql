@@ -9,11 +9,16 @@ SELECT * FROM users WHERE id = $1;
 -- name: GetUserByName :one
 SELECT * FROM users WHERE name = $1;
 
--- name: UpdateUser :one
+-- name: UpdateUserInfo :one
 UPDATE users
 SET name = $2, updated_at = CURRENT_TIMESTAMP
 WHERE id = $1
 RETURNING *;
+
+-- UPDATE users
+-- SET state = $2, updated_at = CURRENT_TIMESTAMP
+-- WHERE id = $1
+-- RETURNING *;
 
 -- name: UpdateUserPassword :exec
 UPDATE users SET password_hash = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $1;
