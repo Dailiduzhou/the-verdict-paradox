@@ -92,6 +92,21 @@ func NewAuthUsecase(userRepo UserRepo, authRepo AuthRepo, ac *conf.Auth) *AuthUs
 	}
 }
 
+func (uc *AuthUsecase) VerifyToken(ctx context.Context, tokenStr string) (*GameClaims, error) {
+	claims, err := uc.ParseAccessToken(tokenStr)
+	if err != nil {
+		return nil, errors.Unauthorized("AUTH_ERROR", "invalid token")
+	}
+	blacklisted, err := uc.IsTokenBlacklisted(ctx, claims.ID)
+	if err != nil {
+		return nil, errors.InternalServer("AUTH_ERROR", "failed to verify token")
+	}
+	if blacklisted {
+		return nil, errors.Unauthorized("AUTH_ERROR", "token has been revoked")
+	}
+	return claims, nil
+}
+
 func (uc *AuthUsecase) Login(ctx context.Context, name, password string) (*User, string, error) {
 	u, err := uc.userRepo.GetUserByName(ctx, name)
 	if err != nil {
