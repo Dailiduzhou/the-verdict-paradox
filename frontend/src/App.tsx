@@ -69,14 +69,34 @@ function Toast(props: { message: string }) {
   )
 }
 
-function Register(props: { onRegistered: () => void; toast: (message: string) => void }) {
+function Fade(props: { on: boolean }) {
+  return <div className={props.on ? 'fade fade--on' : 'fade'} aria-hidden="true" />
+}
+
+function Register(props: {
+  onRegistered: () => void
+  onBack: () => void
+  toast: (message: string) => void
+  blocked: boolean
+}) {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [password2, setPassword2] = useState('')
   const [pending, setPending] = useState(false)
 
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      if (pending || props.blocked) return
+      props.onBack()
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [pending, props.blocked, props.onBack])
+
   const submit = async () => {
-    if (pending) return
+    if (pending || props.blocked) return
     if (!username.trim() || !password) {
       props.toast('请填写用户名和密码')
       return
@@ -109,6 +129,7 @@ function Register(props: { onRegistered: () => void; toast: (message: string) =>
               type="text"
               placeholder="用户名"
               autoComplete="username"
+              disabled={pending || props.blocked}
               value={username}
               onChange={(e) => setUsername(e.target.value)}
             />
@@ -117,6 +138,7 @@ function Register(props: { onRegistered: () => void; toast: (message: string) =>
               type="password"
               placeholder="密码"
               autoComplete="new-password"
+              disabled={pending || props.blocked}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
@@ -125,6 +147,7 @@ function Register(props: { onRegistered: () => void; toast: (message: string) =>
               type="password"
               placeholder="确认密码"
               autoComplete="new-password"
+              disabled={pending || props.blocked}
               value={password2}
               onChange={(e) => setPassword2(e.target.value)}
               onKeyDown={(e) => {
@@ -136,7 +159,7 @@ function Register(props: { onRegistered: () => void; toast: (message: string) =>
               className="registerSubmit"
               type="button"
               onClick={submit}
-              disabled={pending}
+              disabled={pending || props.blocked}
             >
               注册
             </button>
@@ -147,13 +170,30 @@ function Register(props: { onRegistered: () => void; toast: (message: string) =>
   )
 }
 
-function Login(props: { onLoggedIn: () => void; onRegister: () => void; toast: (message: string) => void }) {
+function Login(props: {
+  onLoggedIn: () => void
+  onRegister: () => void
+  onBack: () => void
+  toast: (message: string) => void
+  blocked: boolean
+}) {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [pending, setPending] = useState(false)
 
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      if (pending || props.blocked) return
+      props.onBack()
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [pending, props.blocked, props.onBack])
+
   const submit = async () => {
-    if (pending) return
+    if (pending || props.blocked) return
     setPending(true)
     try {
       const token = await login(username.trim(), password)
@@ -178,6 +218,7 @@ function Login(props: { onLoggedIn: () => void; onRegister: () => void; toast: (
             placeholder="用户名"
             autoComplete="username"
             inputMode="text"
+            disabled={pending || props.blocked}
             value={username}
             onChange={(e) => setUsername(e.target.value)}
           />
@@ -186,6 +227,7 @@ function Login(props: { onLoggedIn: () => void; onRegister: () => void; toast: (
             type="password"
             placeholder="密码"
             autoComplete="current-password"
+            disabled={pending || props.blocked}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             onKeyDown={(e) => {
@@ -193,11 +235,17 @@ function Login(props: { onLoggedIn: () => void; onRegister: () => void; toast: (
             }}
           />
 
-          <button className="loginBtn" type="button" onClick={submit} disabled={pending}>
+          <button className="loginBtn" type="button" onClick={submit} disabled={pending || props.blocked}>
             登录
           </button>
 
-          <button className="registerBtn" type="button" onClick={props.onRegister} aria-label="register" />
+          <button
+            className="registerBtn"
+            type="button"
+            onClick={props.onRegister}
+            disabled={pending || props.blocked}
+            aria-label="register"
+          />
         </div>
       </div>
     </main>
@@ -209,6 +257,11 @@ export default function App() {
   const [toastMessage, setToastMessage] = useState<string | null>(null)
   const toastTimerRef = useRef<number | null>(null)
 
+  const [transitionOn, setTransitionOn] = useState(false)
+  const [transitionBusy, setTransitionBusy] = useState(false)
+  const transitionTimerRef = useRef<number | null>(null)
+  const transitionBusyRef = useRef(false)
+
   const toast = (message: string) => {
     setToastMessage(message)
     if (toastTimerRef.current != null) window.clearTimeout(toastTimerRef.current)
@@ -218,42 +271,97 @@ export default function App() {
   useEffect(() => {
     return () => {
       if (toastTimerRef.current != null) window.clearTimeout(toastTimerRef.current)
+      if (transitionTimerRef.current != null) window.clearTimeout(transitionTimerRef.current)
     }
   }, [])
 
+  const transitionTo = (next: View) => {
+    if (transitionBusyRef.current) return
+    if (next === view) return
+
+    transitionBusyRef.current = true
+    setTransitionBusy(true)
+    setTransitionOn(true)
+
+    // Fade to black.
+    transitionTimerRef.current = window.setTimeout(() => {
+      setView(next)
+
+      // Next frame: start fading back in.
+      requestAnimationFrame(() => {
+        setTransitionOn(false)
+        transitionTimerRef.current = window.setTimeout(() => {
+          transitionBusyRef.current = false
+          setTransitionBusy(false)
+        }, 500)
+      })
+    }, 500)
+  }
+
   useEffect(() => {
-    const onKeyDown = async () => {
+    const start = async () => {
       if (view !== 'splash') return
+      if (transitionBusyRef.current) return
 
       const token = localStorage.getItem(TOKEN_KEY)
       if (!token) {
-        setView('login')
+        transitionTo('login')
         return
       }
 
       const valid = await verifyToken(token)
       if (valid) {
-        setView('game')
+        transitionTo('game')
       } else {
         localStorage.removeItem(TOKEN_KEY)
-        setView('login')
+        transitionTo('login')
       }
     }
 
+    const onKeyDown = () => {
+      void start()
+    }
+
+    const onPointerDown = () => {
+      void start()
+    }
+
     window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
+    window.addEventListener('pointerdown', onPointerDown, { passive: true })
+    // Fallback for environments without Pointer Events.
+    window.addEventListener('mousedown', onPointerDown, { passive: true })
+    window.addEventListener('touchstart', onPointerDown, { passive: true })
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('pointerdown', onPointerDown)
+      window.removeEventListener('mousedown', onPointerDown)
+      window.removeEventListener('touchstart', onPointerDown)
+    }
   }, [view])
 
-  if (view === 'game') return <Game />
+  const blocked = transitionBusy
+
+  if (view === 'game') {
+    return (
+      <>
+        <Game />
+        <Fade on={transitionOn} />
+        {toastMessage && <Toast message={toastMessage} />}
+      </>
+    )
+  }
 
   if (view === 'login') {
     return (
       <>
         <Login
-          onLoggedIn={() => setView('game')}
-          onRegister={() => setView('register')}
+          onLoggedIn={() => transitionTo('game')}
+          onRegister={() => transitionTo('register')}
+          onBack={() => transitionTo('splash')}
           toast={toast}
+          blocked={blocked}
         />
+        <Fade on={transitionOn} />
         {toastMessage && <Toast message={toastMessage} />}
       </>
     )
@@ -262,7 +370,13 @@ export default function App() {
   if (view === 'register') {
     return (
       <>
-        <Register onRegistered={() => setView('login')} toast={toast} />
+        <Register
+          onRegistered={() => transitionTo('login')}
+          onBack={() => transitionTo('login')}
+          toast={toast}
+          blocked={blocked}
+        />
+        <Fade on={transitionOn} />
         {toastMessage && <Toast message={toastMessage} />}
       </>
     )
@@ -278,6 +392,7 @@ export default function App() {
           aria-hidden="true"
         />
       </main>
+      <Fade on={transitionOn} />
       {toastMessage && <Toast message={toastMessage} />}
     </>
   )

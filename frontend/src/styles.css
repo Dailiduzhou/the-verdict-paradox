@@ -30,6 +30,21 @@ body {
   pointer-events: none;
 }
 
+.fade {
+  position: fixed;
+  inset: 0;
+  z-index: 18;
+  background: #000;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+  pointer-events: none;
+}
+
+.fade--on {
+  opacity: 1;
+  pointer-events: auto;
+}
+
 .page {
   height: 100%;
   overflow: hidden;
@@ -134,6 +149,10 @@ body {
   opacity: 0.5;
 }
 
+.loginBtn:disabled:hover {
+  color: rgba(0, 0, 0, 0.55);
+}
+
 .loginBtn:hover {
   color: rgba(0, 0, 0, 0.7);
 }
@@ -161,6 +180,11 @@ body {
   background: transparent;
   padding: 0;
   cursor: pointer;
+}
+
+.registerBtn:disabled {
+  cursor: default;
+  opacity: 0.5;
 }
 
 .registerBtn:hover {
@@ -230,6 +254,10 @@ body {
 .registerSubmit:disabled {
   cursor: default;
   opacity: 0.5;
+}
+
+.registerSubmit:disabled:hover {
+  color: rgba(0, 0, 0, 0.55);
 }
 
 .game {
