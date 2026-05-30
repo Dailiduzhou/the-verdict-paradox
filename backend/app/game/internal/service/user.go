@@ -24,6 +24,14 @@ func NewUserService(authUc *biz.AuthUsecase, userUc *biz.UserUsecase, logger log
 	}
 }
 
+func (s *UserService) GetUserName(ctx context.Context, id int64) (string, error) {
+	u, err := s.userUc.GetUser(ctx, id)
+	if err != nil {
+		return "", err
+	}
+	return u.Name, nil
+}
+
 func (s *UserService) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.RegisterReply, error) {
 	user, err := s.userUc.Register(ctx, req.Name, req.Password)
 	if err != nil {

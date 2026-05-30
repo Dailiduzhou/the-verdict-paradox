@@ -5,6 +5,11 @@ import registerSvg from './assets/register.svg'
 import gameBgSvg from './assets/background.svg'
 import tutorialSvg from './assets/tutorial.svg'
 import settingsSvg from './assets/settings.svg'
+import humanSvg from './assets/human.svg'
+import spySvg from './assets/spy.svg'
+import startrailSvg from './assets/startrail.svg'
+import speakSvg from './assets/speak.svg'
+import verdictSvg from './assets/verdict.svg'
 
 type View = 'splash' | 'login' | 'register' | 'game'
 
@@ -91,6 +96,54 @@ async function verifyToken(token: string) {
   }
 }
 
+const CIRCLE_COLORS = ['#E7FFDF', '#D06464', '#FFF4ED', '#FFCAAE', '#539EFF', '#8AE9FF']
+const TEXT_LABEL_CLASS: Record<number, string> = {
+  0: 'circleLabelTop',
+  60: 'circleLabelRight',
+  120: 'circleLabelRight',
+  180: 'circleLabelBot',
+  240: 'circleLabelLeft',
+  300: 'circleLabelLeft',
+}
+
+function PlayerCircles(props: { players: { user_id: number; name: string }[]; anim: boolean }) {
+  const [, forceUpdate] = useState(0)
+  useEffect(() => {
+    const onResize = () => forceUpdate((n) => n + 1)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+
+  const r = (320 / 1095) * (window.innerHeight || 1080)
+  const d = (122 / 1095) * (window.innerHeight || 1080)
+
+  const circles = props.players.map((p, i) => {
+    const angle = i * 60
+    const rad = (angle * Math.PI) / 180
+    const x = Math.sin(rad) * r
+    const y = -Math.cos(rad) * r
+
+    return (
+      <div
+        key={p.user_id}
+        className={props.anim ? 'pCircle pCircle--show' : 'pCircle'}
+        style={{
+          transform: `translate(calc(-50% + ${x}px), calc(-50% + ${y}px)) scale(${props.anim ? 1 : 0})`,
+          width: d,
+          height: d,
+          background: CIRCLE_COLORS[i],
+        }}
+      >
+        <span className={`circleLabel ${TEXT_LABEL_CLASS[angle] ?? ''} ${props.anim ? 'circleLabel--show' : ''}`}>
+          {p.name}
+        </span>
+      </div>
+    )
+  })
+
+  return <div className="playerCircles">{circles}</div>
+}
+
 function Game(props: { toast: (message: string) => void; blocked: boolean }) {
   const [pressed, setPressed] = useState(false)
   const [tutorialPressed, setTutorialPressed] = useState(false)
@@ -102,6 +155,36 @@ function Game(props: { toast: (message: string) => void; blocked: boolean }) {
   const pollTimerRef = useRef<number | null>(null)
   const wsRef = useRef<WebSocket | null>(null)
   const [connectedRoomID, setConnectedRoomID] = useState<string | null>(null)
+  const [roleReveal, setRoleReveal] = useState<'HUMAN' | 'SPY' | null>(null)
+  const [roleFadeIn, setRoleFadeIn] = useState(false)
+  const [gameWaiting, setGameWaiting] = useState(false)
+  const [startrailGrow, setStartrailGrow] = useState(false)
+  const [players, setPlayers] = useState<{ user_id: number; name: string }[]>([])
+  const [showCircles, setShowCircles] = useState(false)
+  const [circlesAnim, setCirclesAnim] = useState(false)
+  const circlesTimerRef = useRef<number | null>(null)
+  const answerTimerRef = useRef<number | null>(null)
+  const answerDotsRef = useRef<number | null>(null)
+
+  const [answering, setAnswering] = useState(false)
+  const [answerBanner, setAnswerBanner] = useState<'slideIn' | 'hold' | 'slideOut' | 'done' | 'none'>('none')
+  const [bannerClass, setBannerClass] = useState('')
+  const [answerBoxShow, setAnswerBoxShow] = useState(false)
+
+  const [voting, setVoting] = useState(false)
+  const [voteBanner, setVoteBanner] = useState<'slideIn' | 'hold' | 'slideOut' | 'done' | 'none'>('none')
+  const [voteBannerClass, setVoteBannerClass] = useState('')
+  const [voteBoxShow, setVoteBoxShow] = useState(false)
+  const [roundAnswers, setRoundAnswers] = useState<{ user_id: number; name: string; content: string }[]>([])
+  const [selectedVote, setSelectedVote] = useState<number | null>(null)
+  const [voteSent, setVoteSent] = useState(false)
+  const [voteDots, setVoteDots] = useState(1)
+  const voteTimerRef = useRef<number | null>(null)
+  const voteDotsRef = useRef<number | null>(null)
+  const [answerText, setAnswerText] = useState('')
+  const [answerSent, setAnswerSent] = useState(false)
+  const [answerDots, setAnswerDots] = useState(1)
+  const [currentQuestion, setCurrentQuestion] = useState('')
 
   useEffect(() => {
     return () => {
@@ -109,6 +192,11 @@ function Game(props: { toast: (message: string) => void; blocked: boolean }) {
       pollTimerRef.current = null
       if (wsRef.current) wsRef.current.close()
       wsRef.current = null
+      if (circlesTimerRef.current != null) window.clearTimeout(circlesTimerRef.current)
+      if (answerTimerRef.current != null) window.clearTimeout(answerTimerRef.current)
+      if (answerDotsRef.current != null) window.clearInterval(answerDotsRef.current)
+      if (voteTimerRef.current != null) window.clearTimeout(voteTimerRef.current)
+      if (voteDotsRef.current != null) window.clearInterval(voteDotsRef.current)
     }
   }, [])
 
@@ -123,8 +211,38 @@ function Game(props: { toast: (message: string) => void; blocked: boolean }) {
     }
   }, [matching])
 
+  useEffect(() => {
+    if (answerSent) {
+      answerDotsRef.current = window.setInterval(() => {
+        setAnswerDots((d) => (d % 3) + 1)
+      }, 450)
+      return () => {
+        if (answerDotsRef.current != null) window.clearInterval(answerDotsRef.current)
+      }
+    }
+  }, [answerSent])
+
+  useEffect(() => {
+    if (voteSent) {
+      voteDotsRef.current = window.setInterval(() => {
+        setVoteDots((d) => (d % 3) + 1)
+      }, 450)
+      return () => {
+        if (voteDotsRef.current != null) window.clearInterval(voteDotsRef.current)
+      }
+    }
+  }, [voteSent])
+
+  useEffect(() => {
+    if (voteBanner === 'done' && !voteBoxShow) {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => setVoteBoxShow(true))
+      })
+    }
+  }, [voteBanner, voteBoxShow])
+
   const onPressStart = () => {
-    if (props.blocked || matching) return
+    if (props.blocked || matching || answerSent || voteSent) return
     setPressed(true)
   }
 
@@ -187,8 +305,108 @@ function Game(props: { toast: (message: string) => void; blocked: boolean }) {
           setConnectedRoomID(s.roomID)
 
           ws.addEventListener('message', (e) => {
-            // Keep minimal: log for now.
-            console.log('[ws]', e.data)
+            try {
+              const msg = JSON.parse(e.data)
+              if (msg.action === 'game_started') {
+                const role = msg.content?.your_role as string | undefined
+                const pls = msg.content?.players as { user_id: number; name: string }[] | undefined
+                if (pls) setPlayers(pls)
+                if (role === 'HUMAN' || role === 'SPY') {
+                  setRoleReveal(role)
+                  requestAnimationFrame(() => {
+                    requestAnimationFrame(() => setRoleFadeIn(true))
+                  })
+                  window.setTimeout(() => setRoleFadeIn(false), 5500)
+                  window.setTimeout(() => setRoleReveal(null), 6000)
+                }
+              }
+              if (msg.action === 'phase_change') {
+                const phase = msg.content?.phase as string | undefined
+                if (phase === 'WAITING') {
+                  setGameWaiting(true)
+                  setStartrailGrow(false)
+                  requestAnimationFrame(() => {
+                    requestAnimationFrame(() => setStartrailGrow(true))
+                  })
+                  circlesTimerRef.current = window.setTimeout(() => {
+                    setShowCircles(true)
+                    requestAnimationFrame(() => {
+                      requestAnimationFrame(() => setCirclesAnim(true))
+                    })
+                  }, 1550)
+                }
+                if (phase === 'VOTE') {
+                  setVoting(true)
+                  setAnswering(false)
+                  setAnswerBoxShow(false)
+                  setAnswerBanner('none')
+                  setAnswerSent(false)
+                  voteTimerRef.current = window.setTimeout(() => {
+                    setVoteBannerClass('')
+                    setVoteBanner('slideIn')
+                    requestAnimationFrame(() => {
+                      setVoteBannerClass('speakBanner--slideIn')
+                    })
+                    voteTimerRef.current = window.setTimeout(() => {
+                      setVoteBannerClass('speakBanner--hold')
+                      setVoteBanner('hold')
+                    }, 500)
+                    voteTimerRef.current = window.setTimeout(() => {
+                      setVoteBannerClass('speakBanner--slideOut')
+                      setVoteBanner('slideOut')
+                    }, 1500)
+                    voteTimerRef.current = window.setTimeout(() => {
+                      setVoteBanner('done')
+                      requestAnimationFrame(() => {
+                        requestAnimationFrame(() => setVoteBoxShow(true))
+                      })
+                    }, 2000)
+                  }, 500)
+                }
+                if (phase === 'ANSWER') {
+                  setAnswering(true)
+                  setVoting(false)
+                  setVoteBanner('none')
+                  setVoteBoxShow(false)
+                  setCirclesAnim(false)
+                  setStartrailGrow(false)
+                  answerTimerRef.current = window.setTimeout(() => {
+                    setShowCircles(false)
+                    setGameWaiting(false)
+                    // Render banner off-screen first, then slide in.
+                    setBannerClass('')
+                    setAnswerBanner('slideIn')
+                    requestAnimationFrame(() => {
+                      setBannerClass('speakBanner--slideIn')
+                    })
+                    answerTimerRef.current = window.setTimeout(() => {
+                      setBannerClass('speakBanner--hold')
+                      setAnswerBanner('hold')
+                    }, 500)
+                    answerTimerRef.current = window.setTimeout(() => {
+                      setBannerClass('speakBanner--slideOut')
+                      setAnswerBanner('slideOut')
+                    }, 1500)
+                    answerTimerRef.current = window.setTimeout(() => {
+                      setAnswerBanner('done')
+                      requestAnimationFrame(() => {
+                        requestAnimationFrame(() => setAnswerBoxShow(true))
+                      })
+                    }, 2000)
+                  }, 500)
+                }
+              }
+              if (msg.action === 'all_answers') {
+                const ans = msg.content?.answers as { user_id: number; name: string; content: string }[] | undefined
+                if (ans) setRoundAnswers(ans)
+              }
+              if (msg.action === 'question') {
+                const q = msg.content?.question as string | undefined
+                if (q) setCurrentQuestion(q)
+              }
+            } catch {
+              // ignore
+            }
           })
           ws.addEventListener('close', () => {
             wsRef.current = null
@@ -207,6 +425,18 @@ function Game(props: { toast: (message: string) => void; blocked: boolean }) {
     }
   }
 
+  const submitVote = () => {
+    if (!wsRef.current || voteSent || selectedVote == null) return
+    setVoteSent(true)
+    wsRef.current.send(JSON.stringify({ action: 'vote', target_user_id: selectedVote }))
+  }
+
+  const submitAnswer = () => {
+    if (!wsRef.current || answerSent || !answerText.trim()) return
+    setAnswerSent(true)
+    wsRef.current.send(JSON.stringify({ action: 'answer', content: answerText.trim() }))
+  }
+
   return (
     <section className="game" aria-label="game">
       <img className="gameBg" src={gameBgSvg} alt="" aria-hidden="true" />
@@ -218,11 +448,27 @@ function Game(props: { toast: (message: string) => void; blocked: boolean }) {
         onPointerUp={onPressEnd}
         onPointerCancel={onPressEnd}
         onPointerLeave={onPressEnd}
-        onClick={submit}
-        disabled={props.blocked || matching || !!connectedRoomID}
+        onClick={voting && voteBanner === 'done' ? submitVote : answering && answerBanner === 'done' ? submitAnswer : submit}
+        disabled={voting && voteBanner === 'done' ? voteSent : answering && answerBanner === 'done' ? answerSent : props.blocked || matching || !!connectedRoomID}
       >
         <span className="enterBtnInner">
-          {matching ? `Matching${'.'.repeat(dots)}` : 'Enter'}
+          {voteSent
+            ? `Waiting${'.'.repeat(voteDots)}`
+            : answerSent
+              ? `Waiting${'.'.repeat(answerDots)}`
+                : voting && voteBanner === 'done'
+                  ? 'Vote'
+                  : voting
+                    ? ''
+                    : answering && answerBanner === 'done'
+                      ? 'Commit'
+                      : gameWaiting
+                        ? ''
+                        : connectedRoomID
+                          ? 'Ready'
+                          : matching
+                            ? `Matching${'.'.repeat(dots)}`
+                            : 'Enter'}
         </span>
       </button>
 
@@ -251,6 +497,83 @@ function Game(props: { toast: (message: string) => void; blocked: boolean }) {
       >
         <img className="settingsIcon" src={settingsSvg} alt="" aria-hidden="true" />
       </button>
+      {roleReveal && (
+        <div className={roleFadeIn ? 'roleOverlay roleOverlay--show' : 'roleOverlay'} aria-hidden="true">
+          <img className="roleSvg" src={roleReveal === 'HUMAN' ? humanSvg : spySvg} alt="" />
+        </div>
+      )}
+
+      {gameWaiting && (
+        <div className="startrailWrap" aria-hidden="true">
+          <img
+            className={startrailGrow ? 'startrailImg startrailImg--grow' : 'startrailImg'}
+            src={startrailSvg}
+            alt=""
+          />
+        </div>
+      )}
+
+      {showCircles && (
+        <PlayerCircles players={players} anim={circlesAnim} />
+      )}
+
+      {answerBanner !== 'none' && answerBanner !== 'done' && (
+        <div className={`speakBanner ${bannerClass}`} aria-hidden="true">
+          <img className="speakBannerImg" src={speakSvg} alt="" />
+        </div>
+      )}
+
+      {voting && voteBanner !== 'none' && voteBanner !== 'done' && (
+        <div className={`speakBanner ${voteBannerClass}`} aria-hidden="true">
+          <img className="speakBannerImg" src={verdictSvg} alt="" />
+        </div>
+      )}
+
+      {voting && voteBanner === 'done' && voteBoxShow && (
+        <div className="voteGrid" aria-label="vote">
+          {roundAnswers.map((a) => {
+            const idx = players.findIndex((p) => p.user_id === a.user_id)
+            const color = CIRCLE_COLORS[idx >= 0 ? idx : 0]
+            const sel = selectedVote === a.user_id
+            return (
+              <div key={a.user_id} className={`voteCard ${sel && !voteSent ? 'voteCard--sel' : ''}`}>
+                <div className="voteCardTop">
+                  <button
+                    className="voteCircle"
+                    style={{ background: color }}
+                    type="button"
+                    disabled={voteSent}
+                    onClick={() => setSelectedVote(sel ? null : a.user_id)}
+                  >
+                  </button>
+                  <span className="voteName">{a.name}</span>
+                </div>
+                <div className="voteContent">{a.content}</div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {answering && answerBanner === 'done' && (
+        <div className={answerBoxShow ? 'answerBox answerBox--show' : 'answerBox'} aria-label="answer input">
+          <div className="answerBoxQuestion">{currentQuestion}</div>
+          <div className="answerBoxDivider" />
+          <textarea
+            className={`answerBoxInput ${answerSent ? 'answerBoxInput--sent' : ''}`}
+            value={answerText}
+            onChange={(e) => setAnswerText(e.target.value)}
+            disabled={answerSent}
+            placeholder="输入你的回答..."
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault()
+                submitAnswer()
+              }
+            }}
+          />
+        </div>
+      )}
     </section>
   )
 }

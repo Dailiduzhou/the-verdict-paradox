@@ -94,9 +94,10 @@ func NewHTTPServer(c *conf.Server, user *service.UserService, game *service.Game
 			return
 		}
 
-		userName := ""
-		if claims.Subject != "" {
-			userName = claims.Subject
+		userName, err := user.GetUserName(r.Context(), claims.UserID)
+		if err != nil {
+			stdhttp.Error(w, "", stdhttp.StatusUnauthorized)
+			return
 		}
 
 		_ = rm.HandleWS(w, r, roomID, strconv.FormatInt(claims.UserID, 10), userName)

@@ -162,3 +162,12 @@ func (r *MatchRepo) CreateRoomAndUpdateState(ctx context.Context, roomID string,
 	_, err := pipe.Exec(ctx)
 	return err
 }
+
+func (r *MatchRepo) ClearPlayerState(ctx context.Context, userID int64) error {
+	uidStr := strconv.FormatInt(userID, 10)
+	return r.rdb.Del(ctx, UserStateKeyPrefix+uidStr).Err()
+}
+
+func (r *MatchRepo) DeleteRoomInfo(ctx context.Context, roomID string) error {
+	return r.rdb.Del(ctx, "room:info:"+roomID).Err()
+}
