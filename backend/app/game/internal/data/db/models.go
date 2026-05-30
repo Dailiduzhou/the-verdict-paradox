@@ -11,6 +11,7 @@ import (
 type User struct {
 	ID           int64
 	Name         string
+	State        string
 	PasswordHash string
 	CreatedAt    pgtype.Timestamptz
 	UpdatedAt    pgtype.Timestamptz

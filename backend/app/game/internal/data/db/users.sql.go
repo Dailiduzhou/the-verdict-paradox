@@ -12,7 +12,7 @@ import (
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (name, password_hash)
 VALUES ($1, $2)
-RETURNING id, name, password_hash, created_at, updated_at
+RETURNING id, name, state, password_hash, created_at, updated_at
 `
 
 type CreateUserParams struct {
@@ -26,6 +26,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
+		&i.State,
 		&i.PasswordHash,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -43,7 +44,7 @@ func (q *Queries) DeleteUser(ctx context.Context, id int64) error {
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, name, password_hash, created_at, updated_at FROM users WHERE id = $1
+SELECT id, name, state, password_hash, created_at, updated_at FROM users WHERE id = $1
 `
 
 func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
@@ -52,6 +53,7 @@ func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
+		&i.State,
 		&i.PasswordHash,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -60,7 +62,7 @@ func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
 }
 
 const getUserByName = `-- name: GetUserByName :one
-SELECT id, name, password_hash, created_at, updated_at FROM users WHERE name = $1
+SELECT id, name, state, password_hash, created_at, updated_at FROM users WHERE name = $1
 `
 
 func (q *Queries) GetUserByName(ctx context.Context, name string) (User, error) {
@@ -69,6 +71,7 @@ func (q *Queries) GetUserByName(ctx context.Context, name string) (User, error) 
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
+		&i.State,
 		&i.PasswordHash,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -76,24 +79,25 @@ func (q *Queries) GetUserByName(ctx context.Context, name string) (User, error) 
 	return i, err
 }
 
-const updateUser = `-- name: UpdateUser :one
+const updateUserInfo = `-- name: UpdateUserInfo :one
 UPDATE users
 SET name = $2, updated_at = CURRENT_TIMESTAMP
 WHERE id = $1
-RETURNING id, name, password_hash, created_at, updated_at
+RETURNING id, name, state, password_hash, created_at, updated_at
 `
 
-type UpdateUserParams struct {
+type UpdateUserInfoParams struct {
 	ID   int64
 	Name string
 }
 
-func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error) {
-	row := q.db.QueryRow(ctx, updateUser, arg.ID, arg.Name)
+func (q *Queries) UpdateUserInfo(ctx context.Context, arg UpdateUserInfoParams) (User, error) {
+	row := q.db.QueryRow(ctx, updateUserInfo, arg.ID, arg.Name)
 	var i User
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
+		&i.State,
 		&i.PasswordHash,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -113,4 +117,30 @@ type UpdateUserPasswordParams struct {
 func (q *Queries) UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error {
 	_, err := q.db.Exec(ctx, updateUserPassword, arg.ID, arg.PasswordHash)
 	return err
+}
+
+const updateUserState = `-- name: UpdateUserState :one
+UPDATE users
+SET state = $2, updated_at = CURRENT_TIMESTAMP
+WHERE id = $1
+RETURNING id, name, state, password_hash, created_at, updated_at
+`
+
+type UpdateUserStateParams struct {
+	ID    int64
+	State string
+}
+
+func (q *Queries) UpdateUserState(ctx context.Context, arg UpdateUserStateParams) (User, error) {
+	row := q.db.QueryRow(ctx, updateUserState, arg.ID, arg.State)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.State,
+		&i.PasswordHash,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }

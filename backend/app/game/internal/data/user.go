@@ -133,7 +133,7 @@ func (r *UserRepo) GetUserByName(ctx context.Context, name string) (*biz.User, e
 }
 
 func (r *UserRepo) UpdateUser(ctx context.Context, id int64, name string) (*biz.User, error) {
-	dbUser, err := r.data.q.UpdateUser(ctx, db.UpdateUserParams{
+	dbUser, err := r.data.q.UpdateUserInfo(ctx, db.UpdateUserInfoParams{
 		ID:   id,
 		Name: name,
 	})
