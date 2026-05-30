@@ -15,11 +15,10 @@ SET name = $2, updated_at = CURRENT_TIMESTAMP
 WHERE id = $1
 RETURNING *;
 
--- name: UpdateUserState :one
-UPDATE users
-SET state = $2, updated_at = CURRENT_TIMESTAMP
-WHERE id = $1
-RETURNING *;
+-- UPDATE users
+-- SET state = $2, updated_at = CURRENT_TIMESTAMP
+-- WHERE id = $1
+-- RETURNING *;
 
 -- name: UpdateUserPassword :exec
 UPDATE users SET password_hash = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $1;
