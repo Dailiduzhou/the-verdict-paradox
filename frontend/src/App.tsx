@@ -2,10 +2,12 @@ import { useEffect, useRef, useState } from 'react'
 import splashSvg from './assets/login.svg'
 import loginSvg from './assets/login1.svg'
 import registerSvg from './assets/register.svg'
+import gameBgSvg from './assets/background.svg'
 
 type View = 'splash' | 'login' | 'register' | 'game'
 
 const TOKEN_KEY = 'token'
+const USERNAME_KEY = 'username'
 
 async function login(username: string, password: string) {
   const res = await fetch('/v1/users/login', {
@@ -14,13 +16,27 @@ async function login(username: string, password: string) {
       'content-type': 'application/json',
     },
     // Backend contract is { phone, password }. Treat username as phone here.
-    body: JSON.stringify({ phone: username, password }),
+    body: JSON.stringify({ username, password }),
   })
 
   if (!res.ok) throw new Error('login_failed')
   const data = (await res.json()) as { token?: string }
   if (!data.token) throw new Error('missing_token')
   return data.token
+}
+
+async function startGame(name: string, token: string) {
+  const res = await fetch('/v1/game/start', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ name }),
+  })
+
+  if (!res.ok) throw new Error('start_failed')
+  return (await res.json()) as { matchID?: string }
 }
 
 async function register(username: string, password: string) {
@@ -53,10 +69,75 @@ async function verifyToken(token: string) {
   }
 }
 
-function Game() {
+function Game(props: { toast: (message: string) => void; blocked: boolean }) {
+  const [pressed, setPressed] = useState(false)
+  const [matching, setMatching] = useState(false)
+  const [dots, setDots] = useState(1)
+  const dotsTimerRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    if (!matching) return
+    dotsTimerRef.current = window.setInterval(() => {
+      setDots((d) => (d % 3) + 1)
+    }, 450)
+    return () => {
+      if (dotsTimerRef.current != null) window.clearInterval(dotsTimerRef.current)
+      dotsTimerRef.current = null
+    }
+  }, [matching])
+
+  const onPressStart = () => {
+    if (props.blocked || matching) return
+    setPressed(true)
+  }
+
+  const onPressEnd = () => {
+    setPressed(false)
+  }
+
+  const submit = async () => {
+    if (props.blocked || matching) return
+
+    const token = localStorage.getItem(TOKEN_KEY)
+    const name = localStorage.getItem(USERNAME_KEY)
+
+    if (!token) {
+      props.toast('未登录')
+      return
+    }
+    if (!name) {
+      props.toast('缺少用户名')
+      return
+    }
+
+    setMatching(true)
+    setDots(1)
+    try {
+      await startGame(name, token)
+    } catch {
+      setMatching(false)
+      props.toast('匹配失败')
+    }
+  }
+
   return (
     <section className="game" aria-label="game">
-      <div className="gameInner">GAME</div>
+      <img className="gameBg" src={gameBgSvg} alt="" aria-hidden="true" />
+      <div className="gameBottom" aria-hidden="true" />
+      <button
+        className={pressed ? 'enterBtn enterBtn--pressed' : 'enterBtn'}
+        type="button"
+        onPointerDown={onPressStart}
+        onPointerUp={onPressEnd}
+        onPointerCancel={onPressEnd}
+        onPointerLeave={onPressEnd}
+        onClick={submit}
+        disabled={props.blocked}
+      >
+        <span className="enterBtnInner">
+          {matching ? `Matching${'.'.repeat(dots)}` : 'Enter'}
+        </span>
+      </button>
     </section>
   )
 }
@@ -198,6 +279,7 @@ function Login(props: {
     try {
       const token = await login(username.trim(), password)
       localStorage.setItem(TOKEN_KEY, token)
+      localStorage.setItem(USERNAME_KEY, username.trim())
       props.onLoggedIn()
     } catch {
       props.toast('登录失败')
@@ -344,7 +426,7 @@ export default function App() {
   if (view === 'game') {
     return (
       <>
-        <Game />
+        <Game toast={toast} blocked={blocked} />
         <Fade on={transitionOn} />
         {toastMessage && <Toast message={toastMessage} />}
       </>
