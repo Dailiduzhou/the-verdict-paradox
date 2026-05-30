@@ -6,12 +6,12 @@ import (
 
 	"github.com/Dailiduzhou/the-verdict-paradox/backend/app/game/internal/conf"
 	"github.com/Dailiduzhou/the-verdict-paradox/backend/app/game/internal/server"
+	"github.com/Dailiduzhou/the-verdict-paradox/backend/app/game/internal/utils/logger"
 
 	"github.com/go-kratos/kratos/v2"
 	"github.com/go-kratos/kratos/v2/config"
 	"github.com/go-kratos/kratos/v2/config/file"
 	"github.com/go-kratos/kratos/v2/log"
-	"github.com/go-kratos/kratos/v2/middleware/tracing"
 	"github.com/go-kratos/kratos/v2/transport/grpc"
 	"github.com/go-kratos/kratos/v2/transport/http"
 
@@ -21,7 +21,7 @@ import (
 // go build -ldflags "-X main.Version=x.y.z"
 var (
 	// Name is the name of the compiled software.
-	Name string
+	Name = "the-verdict-paradox-backend"
 	// Version is the version of the compiled software.
 	Version string
 	// flagconf is the config flag.
@@ -32,6 +32,12 @@ var (
 
 func init() {
 	flag.StringVar(&flagconf, "conf", "../../configs", "config path, eg: -conf config.yaml")
+
+	if p := findEnvFile(); p != "" {
+		if err := loadEnv(p); err != nil {
+			log.Warnf("failed to load .env from %s: %v", p, err)
+		}
+	}
 }
 
 func newApp(logger log.Logger, gs *grpc.Server, hs *http.Server, ms *server.MatchServer) *kratos.App {
@@ -51,15 +57,9 @@ func newApp(logger log.Logger, gs *grpc.Server, hs *http.Server, ms *server.Matc
 
 func main() {
 	flag.Parse()
-	logger := log.With(log.NewStdLogger(os.Stdout),
-		"ts", log.DefaultTimestamp,
-		"caller", log.DefaultCaller,
-		"service.id", id,
-		"service.name", Name,
-		"service.version", Version,
-		"trace.id", tracing.TraceID(),
-		"span.id", tracing.SpanID(),
-	)
+
+	logger := logger.NewJSONLogger()
+	log.SetLogger(logger)
 	c := config.New(
 		config.WithSource(
 			file.NewSource(flagconf),
