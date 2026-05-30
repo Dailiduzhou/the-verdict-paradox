@@ -43,6 +43,7 @@ func NewHTTPServer(c *conf.Server, user *service.UserService, game *service.Game
 	)
 
 	opts := []http.ServerOption{
+		http.Filter(custommid.CORS()),
 		http.Middleware(
 			recovery.Recovery(),
 			selector.Server(
