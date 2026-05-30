@@ -179,12 +179,12 @@ body {
   left: calc(640 / 1920 * 100%);
   top: calc(860 / 1080 * 100%);
 
-  width: 50px;
-  height: 30px;
+  width: 30px;
+  height: 20px;
   transform: translate(0%, 0%);
 
   box-sizing: border-box;
-  border: 0px solid rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(0, 0, 0, 0.35);
   border-radius: 4px;
   background: transparent;
   padding: 0;
