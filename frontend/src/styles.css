@@ -338,3 +338,84 @@ body {
   letter-spacing: 0.06em;
   user-select: none;
 }
+
+.tutorialBtn {
+  position: absolute;
+  bottom: 0;
+  /* shift whole button left by 100px without using transform */
+  left: calc(100% * 6 / 8 - 82px);
+  right: calc(100% * 0.5 / 8 + 82px);
+  height: calc(156 / 1095 * 100%);
+
+  border: none;
+  padding: 0;
+  background: linear-gradient(180deg, #ffe477 0%, #fffcd9 100%);
+
+  /* parallelogram: roughly 30deg tilt */
+  clip-path: polygon(27% 0%, 100% 0%, 73% 100%, 0% 100%);
+
+  transform-origin: 50% 85%;
+  transition: transform 90ms ease;
+  cursor: pointer;
+}
+
+.tutorialBtn--pressed {
+  transform: scale(0.95);
+}
+
+.tutorialBtn:disabled {
+  cursor: default;
+  opacity: 0.8;
+}
+
+.tutorialIcon {
+  width: 95px;
+  height: 95px;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: none;
+}
+
+.settingsBtn {
+  position: absolute;
+  bottom: 0;
+  left: calc(100% * 6.8 / 8 - 25px);
+  right: 0;
+  height: calc(156 / 1095 * 100%);
+
+  border: none;
+  padding: 0;
+  background: linear-gradient(180deg, #4366ff 0%, #83b1f333 181%);
+
+  /* right-angled trapezoid */
+  clip-path: polygon(30% 0%, 100% 0%, 100% 100%, 0% 100%);
+
+  transform-origin: 70% 85%;
+  transition: transform 90ms ease;
+  cursor: pointer;
+}
+
+.settingsBtn--pressed {
+  transform: scale(0.95);
+}
+
+.settingsBtn:disabled {
+  cursor: default;
+  opacity: 0.8;
+}
+
+.settingsIcon {
+  width: 98px;
+  height: 98px;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: none;
+}

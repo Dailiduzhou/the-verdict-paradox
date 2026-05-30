@@ -3,6 +3,8 @@ import splashSvg from './assets/login.svg'
 import loginSvg from './assets/login1.svg'
 import registerSvg from './assets/register.svg'
 import gameBgSvg from './assets/background.svg'
+import tutorialSvg from './assets/tutorial.svg'
+import settingsSvg from './assets/settings.svg'
 
 type View = 'splash' | 'login' | 'register' | 'game'
 
@@ -16,7 +18,7 @@ async function login(username: string, password: string) {
       'content-type': 'application/json',
     },
     // Backend contract is { phone, password }. Treat username as phone here.
-    body: JSON.stringify({ username, password }),
+    body: JSON.stringify({ name: username, password }),
   })
 
   if (!res.ok) throw new Error('login_failed')
@@ -36,7 +38,27 @@ async function startGame(name: string, token: string) {
   })
 
   if (!res.ok) throw new Error('start_failed')
-  return (await res.json()) as { matchID?: string }
+  const data = (await res.json()) as { matchID?: string }
+  if (!data.matchID) throw new Error('missing_match_id')
+  return data.matchID
+}
+
+async function getMatchStatus(matchID: string, token: string) {
+  const res = await fetch(`/v1/game/status/${encodeURIComponent(matchID)}`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
+
+  if (!res.ok) throw new Error('status_failed')
+  return (await res.json()) as { status?: string; roomID?: string }
+}
+
+function toWsUrl(roomID: string, token: string) {
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  const qs = new URLSearchParams({ token })
+  return `${protocol}//${window.location.host}/ws/room/${encodeURIComponent(roomID)}?${qs.toString()}`
 }
 
 async function register(username: string, password: string) {
@@ -45,7 +67,7 @@ async function register(username: string, password: string) {
     headers: {
       'content-type': 'application/json',
     },
-    body: JSON.stringify({ username, password }),
+    body: JSON.stringify({ name: username, password }),
   })
 
   if (!res.ok) throw new Error('register_failed')
@@ -71,9 +93,24 @@ async function verifyToken(token: string) {
 
 function Game(props: { toast: (message: string) => void; blocked: boolean }) {
   const [pressed, setPressed] = useState(false)
+  const [tutorialPressed, setTutorialPressed] = useState(false)
+  const [settingsPressed, setSettingsPressed] = useState(false)
   const [matching, setMatching] = useState(false)
   const [dots, setDots] = useState(1)
   const dotsTimerRef = useRef<number | null>(null)
+
+  const pollTimerRef = useRef<number | null>(null)
+  const wsRef = useRef<WebSocket | null>(null)
+  const [connectedRoomID, setConnectedRoomID] = useState<string | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (pollTimerRef.current != null) window.clearInterval(pollTimerRef.current)
+      pollTimerRef.current = null
+      if (wsRef.current) wsRef.current.close()
+      wsRef.current = null
+    }
+  }, [])
 
   useEffect(() => {
     if (!matching) return
@@ -95,8 +132,26 @@ function Game(props: { toast: (message: string) => void; blocked: boolean }) {
     setPressed(false)
   }
 
+  const onTutorialPressStart = () => {
+    if (props.blocked) return
+    setTutorialPressed(true)
+  }
+
+  const onTutorialPressEnd = () => {
+    setTutorialPressed(false)
+  }
+
+  const onSettingsPressStart = () => {
+    if (props.blocked) return
+    setSettingsPressed(true)
+  }
+
+  const onSettingsPressEnd = () => {
+    setSettingsPressed(false)
+  }
+
   const submit = async () => {
-    if (props.blocked || matching) return
+    if (props.blocked || matching || connectedRoomID) return
 
     const token = localStorage.getItem(TOKEN_KEY)
     const name = localStorage.getItem(USERNAME_KEY)
@@ -113,7 +168,39 @@ function Game(props: { toast: (message: string) => void; blocked: boolean }) {
     setMatching(true)
     setDots(1)
     try {
+      // Backend currently expects {matchid} to be the username (not the numeric matchID).
       await startGame(name, token)
+
+      if (pollTimerRef.current != null) window.clearInterval(pollTimerRef.current)
+      pollTimerRef.current = window.setInterval(async () => {
+        try {
+          const s = await getMatchStatus(name, token)
+          if (s.status !== 'IN_GAME') return
+          if (!s.roomID) throw new Error('missing_room_id')
+
+          window.clearInterval(pollTimerRef.current!)
+          pollTimerRef.current = null
+          setMatching(false)
+
+          const ws = new WebSocket(toWsUrl(s.roomID, token))
+          wsRef.current = ws
+          setConnectedRoomID(s.roomID)
+
+          ws.addEventListener('message', (e) => {
+            // Keep minimal: log for now.
+            console.log('[ws]', e.data)
+          })
+          ws.addEventListener('close', () => {
+            wsRef.current = null
+            setConnectedRoomID(null)
+          })
+        } catch {
+          if (pollTimerRef.current != null) window.clearInterval(pollTimerRef.current)
+          pollTimerRef.current = null
+          setMatching(false)
+          props.toast('匹配失败')
+        }
+      }, 1000)
     } catch {
       setMatching(false)
       props.toast('匹配失败')
@@ -132,11 +219,37 @@ function Game(props: { toast: (message: string) => void; blocked: boolean }) {
         onPointerCancel={onPressEnd}
         onPointerLeave={onPressEnd}
         onClick={submit}
-        disabled={props.blocked}
+        disabled={props.blocked || matching || !!connectedRoomID}
       >
         <span className="enterBtnInner">
           {matching ? `Matching${'.'.repeat(dots)}` : 'Enter'}
         </span>
+      </button>
+
+      <button
+        className={tutorialPressed ? 'tutorialBtn tutorialBtn--pressed' : 'tutorialBtn'}
+        type="button"
+        onPointerDown={onTutorialPressStart}
+        onPointerUp={onTutorialPressEnd}
+        onPointerCancel={onTutorialPressEnd}
+        onPointerLeave={onTutorialPressEnd}
+        disabled={props.blocked}
+        aria-label="tutorial"
+      >
+        <img className="tutorialIcon" src={tutorialSvg} alt="" aria-hidden="true" />
+      </button>
+
+      <button
+        className={settingsPressed ? 'settingsBtn settingsBtn--pressed' : 'settingsBtn'}
+        type="button"
+        onPointerDown={onSettingsPressStart}
+        onPointerUp={onSettingsPressEnd}
+        onPointerCancel={onSettingsPressEnd}
+        onPointerLeave={onSettingsPressEnd}
+        disabled={props.blocked}
+        aria-label="settings"
+      >
+        <img className="settingsIcon" src={settingsSvg} alt="" aria-hidden="true" />
       </button>
     </section>
   )
