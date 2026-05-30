@@ -18,11 +18,11 @@ const (
 	writeWait      = 10 * time.Second
 	maxMsgSize     = 4096
 	maxPlayers     = 6
-	realPlayers    = 4
-	answerTimeout  = 60 * time.Second
-	voteTimeout    = 30 * time.Second
+	RealPlayers    = 4
+	answerTimeout  = 180 * time.Second
+	voteTimeout    = 180 * time.Second
 	resultDisplay  = 5 * time.Second
-	questionDelay  = 500 * time.Millisecond
+	waitingDelay   = 6 * time.Second
 	reconnectGrace = 2 * time.Minute
 )
 
@@ -54,6 +54,7 @@ type Room struct {
 	Game        *GameSession
 	gameUsecase *GameUsecase
 	gameRepo    GameRepo
+	matchRepo   MatchRepo
 	llmClient   LLMClient
 
 	mu         sync.RWMutex
@@ -74,6 +75,7 @@ func NewRoom(id string, manager *RoomManager) *Room {
 		manager:     manager,
 		gameUsecase: manager.gameUsecase,
 		gameRepo:    manager.gameRepo,
+		matchRepo:   manager.matchRepo,
 		llmClient:   manager.llmClient,
 		idleDone:    make(chan struct{}),
 		log:         manager.log,
@@ -85,15 +87,17 @@ type RoomManager struct {
 	mu          sync.RWMutex
 	gameUsecase *GameUsecase
 	gameRepo    GameRepo
+	matchRepo   MatchRepo
 	llmClient   LLMClient
 	log         *log.Helper
 }
 
-func NewRoomManager(logger log.Logger, gameUsecase *GameUsecase, gameRepo GameRepo, llmClient LLMClient) *RoomManager {
+func NewRoomManager(logger log.Logger, gameUsecase *GameUsecase, gameRepo GameRepo, matchRepo MatchRepo, llmClient LLMClient) *RoomManager {
 	return &RoomManager{
 		rooms:       make(map[string]*Room),
 		gameUsecase: gameUsecase,
 		gameRepo:    gameRepo,
+		matchRepo:   matchRepo,
 		llmClient:   llmClient,
 		log:         log.NewHelper(logger),
 	}
@@ -332,7 +336,7 @@ func (r *Room) advanceToVote() {
 	r.broadcastGameAction("phase_change", map[string]interface{}{
 		"phase":     PhaseVote.String(),
 		"round":     r.Game.Round,
-		"timeout_s": 30,
+		"timeout_s": 180,
 	})
 
 	r.phaseTimer = time.AfterFunc(voteTimeout, func() {
@@ -405,10 +409,24 @@ func (r *Room) generateAIVotesAndTally() {
 
 	r.phaseTimer = time.AfterFunc(resultDisplay, func() {
 		r.mu.Lock()
-		if r.Game != nil && r.Game.Phase == PhaseResult {
-			r.nextRound()
+		defer r.mu.Unlock()
+		if r.Game == nil || r.Game.Phase != PhaseResult {
+			return
 		}
-		r.mu.Unlock()
+		r.Game.Phase = PhaseWaiting
+		nextRoundNum := r.Game.Round + 1
+		r.broadcastGameAction("phase_change", map[string]interface{}{
+			"phase":     PhaseWaiting.String(),
+			"round":     nextRoundNum,
+			"timeout_s": 6,
+		})
+		r.phaseTimer = time.AfterFunc(waitingDelay, func() {
+			r.mu.Lock()
+			defer r.mu.Unlock()
+			if r.Game != nil && r.Game.Phase == PhaseWaiting {
+				r.nextRound()
+			}
+		})
 	})
 }
 
@@ -431,25 +449,19 @@ func (r *Room) nextRound() {
 		"question": r.Game.Question,
 	})
 
-	r.phaseTimer = time.AfterFunc(questionDelay, func() {
-		r.mu.Lock()
-		defer r.mu.Unlock()
-		if r.Game != nil && r.Game.Phase == PhaseQuestion {
-			r.Game.Phase = PhaseAnswer
-			r.broadcastGameAction("phase_change", map[string]interface{}{
-				"phase":     PhaseAnswer.String(),
-				"round":     r.Game.Round,
-				"timeout_s": 60,
-			})
+	r.Game.Phase = PhaseAnswer
+	r.broadcastGameAction("phase_change", map[string]interface{}{
+		"phase":     PhaseAnswer.String(),
+		"round":     r.Game.Round,
+		"timeout_s": 180,
+	})
 
-			r.phaseTimer = time.AfterFunc(answerTimeout, func() {
-				r.mu.Lock()
-				shouldAdvance := r.Game != nil && r.Game.Phase == PhaseAnswer
-				r.mu.Unlock()
-				if shouldAdvance {
-					r.advanceToVote()
-				}
-			})
+	r.phaseTimer = time.AfterFunc(answerTimeout, func() {
+		r.mu.Lock()
+		shouldAdvance := r.Game != nil && r.Game.Phase == PhaseAnswer
+		r.mu.Unlock()
+		if shouldAdvance {
+			r.advanceToVote()
 		}
 	})
 }
@@ -486,7 +498,6 @@ func (r *Room) endGame(winner string) {
 
 func (r *Room) startGame() {
 	r.gameUsecase.BeginRound(r.Game)
-	r.nextRound()
 
 	playerList := make([]map[string]interface{}, 0, len(r.Game.Players))
 	for _, p := range r.Game.Players {
@@ -523,6 +534,29 @@ func (r *Room) startGame() {
 		default:
 		}
 	}
+
+	// Wait 6s before WAITING — role reveal animation plays during this gap.
+	r.phaseTimer = time.AfterFunc(waitingDelay, func() {
+		r.mu.Lock()
+		defer r.mu.Unlock()
+		if r.Game == nil || r.Game.Phase != PhaseWaiting {
+			return
+		}
+
+		r.broadcastGameAction("phase_change", map[string]interface{}{
+			"phase":     PhaseWaiting.String(),
+			"round":     0,
+			"timeout_s": 6,
+		})
+
+		r.phaseTimer = time.AfterFunc(waitingDelay, func() {
+			r.mu.Lock()
+			defer r.mu.Unlock()
+			if r.Game != nil && r.Game.Phase == PhaseWaiting {
+				r.nextRound()
+			}
+		})
+	})
 
 	go r.gameRepo.SaveSession(context.Background(), r.Game)
 }
@@ -664,10 +698,17 @@ func (r *Room) Run() {
 				count := len(r.Clients)
 				r.mu.Unlock()
 
-				r.broadcastSystem(Message{
-					Action: "player_joined",
-					Sender: client.Name,
-				})
+				// Only broadcast join when game is already running (reconnect).
+				r.mu.RLock()
+				if r.Game != nil {
+					r.mu.RUnlock()
+					r.broadcastSystem(Message{
+						Action: "player_joined",
+						Sender: client.Name,
+					})
+				} else {
+					r.mu.RUnlock()
+				}
 				r.log.Infof("room [%s] player %s joined, %d total", r.ID, client.Name, count)
 			}
 
@@ -790,6 +831,24 @@ func (r *Room) handleDisconnect(client *Client) {
 			p.ConnID = ""
 			r.log.Infof("player %s disconnected from game in room %s", p.Name, r.ID)
 
+			// If a real player disconnects, end the game immediately.
+			if p.Role != RoleAI && r.Game.Phase != PhaseEnd {
+				r.endGame("")
+
+				// Clean up Redis state so the next match is not contaminated.
+				go func() {
+					ctx := context.Background()
+					for _, pl := range r.Game.Players {
+						if pl.Role != RoleAI {
+							_ = r.matchRepo.ClearPlayerState(ctx, pl.UserID)
+						}
+					}
+					_ = r.matchRepo.DeleteRoomInfo(ctx, r.ID)
+					_ = r.gameRepo.DeleteSession(ctx, r.ID)
+				}()
+				return
+			}
+
 			for client2 := range r.Clients {
 				if client2.UserID == client.UserID && client2 != client {
 					return
@@ -802,7 +861,7 @@ func (r *Room) handleDisconnect(client *Client) {
 
 func (r *Room) checkAllConnected() bool {
 	if r.Game == nil {
-		return len(r.Clients) >= realPlayers
+		return len(r.Clients) >= RealPlayers
 	}
 
 	connected := 0
@@ -852,7 +911,7 @@ func (r *Room) loadOrCreateGame() {
 		names[client.UserID] = client.Name
 	}
 
-	if len(playerIDs) < realPlayers {
+	if len(playerIDs) < RealPlayers {
 		return
 	}
 

@@ -40,7 +40,7 @@ func (s *MatchServer) Start(ctx context.Context) error {
 		select {
 		case <-ticker.C:
 			execCtx, cancel := context.WithTimeout(context.Background(), time.Second*5)
-			s.matchUsecase.LockAndMatch(execCtx, 6)
+			s.matchUsecase.LockAndMatch(execCtx, biz.RealPlayers)
 			cancel()
 
 		case <-s.stop:

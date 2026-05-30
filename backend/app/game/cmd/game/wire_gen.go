@@ -50,7 +50,7 @@ func wireApp(confServer *conf.Server, confData *conf.Data, auth *conf.Auth, logg
 	grpcServer := server.NewGRPCServer(confServer, userService, gameService, authUsecase, auth, logger)
 	llmClient := data.NewOpenAIClient(logger)
 	gameUsecase := biz.NewGameUsecase(gameRepo, llmClient, logger)
-	roomManager := biz.NewRoomManager(logger, gameUsecase, gameRepo, llmClient)
+	roomManager := biz.NewRoomManager(logger, gameUsecase, gameRepo, matchRepo, llmClient)
 	httpServer := server.NewHTTPServer(confServer, userService, gameService, authUsecase, auth, roomManager, logger)
 	matchUsecase := biz.NewMatchUsecase(matchRepo, logger)
 	matchServer := server.NewMatchServer(matchUsecase, logger)

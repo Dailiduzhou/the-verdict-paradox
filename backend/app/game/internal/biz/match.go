@@ -15,6 +15,8 @@ type MatchRepo interface {
 	PopMatchedPlayers(ctx context.Context, requiredPlayers int) ([]int64, error)
 	PushBackToPool(ctx context.Context, users []int64) error
 	CreateRoomAndUpdateState(ctx context.Context, roomID string, users []int64) error
+	ClearPlayerState(ctx context.Context, userID int64) error
+	DeleteRoomInfo(ctx context.Context, roomID string) error
 }
 
 type MatchUsecase struct {
