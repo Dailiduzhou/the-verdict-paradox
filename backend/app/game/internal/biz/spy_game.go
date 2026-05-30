@@ -81,21 +81,22 @@ type RoundLog struct {
 }
 
 type GameSession struct {
-	RoomID       string         `json:"room_id"`
-	Phase        GamePhase      `json:"phase"`
-	Round        int            `json:"round"`
-	Question     string         `json:"question"`
-	Players      []*PlayerInfo  `json:"players"`
-	ChatHistory  []*ChatMessage `json:"chat_history"`
-	RoundLogs    []*RoundLog    `json:"round_logs"`
-	Winner       string         `json:"winner"`
-	StartedAt    time.Time      `json:"started_at"`
-	UsedQuestions map[int]bool  `json:"used_questions"`
+	RoomID        string         `json:"room_id"`
+	Phase         GamePhase      `json:"phase"`
+	Round         int            `json:"round"`
+	Question      string         `json:"question"`
+	Players       []*PlayerInfo  `json:"players"`
+	ChatHistory   []*ChatMessage `json:"chat_history"`
+	RoundLogs     []*RoundLog    `json:"round_logs"`
+	Winner        string         `json:"winner"`
+	StartedAt     time.Time      `json:"started_at"`
+	UsedQuestions map[int]bool   `json:"used_questions"`
 
-	AnswerCount int
-	VoteCount   int
-	PendingAI   bool
-	StopCh      chan struct{}
+	AnswerCount         int
+	VoteCount           int
+	PendingAI           bool
+	StopCh              chan struct{}
+	CurrentRoundAnswers []*ChatMessage `json:"-"`
 
 	mu sync.RWMutex
 }

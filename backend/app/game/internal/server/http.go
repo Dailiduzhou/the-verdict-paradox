@@ -4,7 +4,9 @@ import (
 	"context"
 	stdhttp "net/http"
 	"strconv"
+	"strings"
 
+	docs "github.com/Dailiduzhou/the-verdict-paradox/backend/api/docs"
 	gamev1 "github.com/Dailiduzhou/the-verdict-paradox/backend/api/game/v1"
 	userv1 "github.com/Dailiduzhou/the-verdict-paradox/backend/api/user/v1"
 	"github.com/Dailiduzhou/the-verdict-paradox/backend/app/game/internal/biz"
@@ -52,6 +54,9 @@ func NewHTTPServer(c *conf.Server, user *service.UserService, game *service.Game
 					if len(operation) >= 3 && operation[:3] == "/ws" {
 						return false
 					}
+					if strings.HasPrefix(operation, "/docs") {
+						return false
+					}
 					return !publicOps[operation]
 				}).
 				Build(),
@@ -70,6 +75,8 @@ func NewHTTPServer(c *conf.Server, user *service.UserService, game *service.Game
 	srv := http.NewServer(opts...)
 	userv1.RegisterUserHTTPServer(srv, user)
 	gamev1.RegisterGameHTTPServer(srv, game)
+
+	srv.HandlePrefix("/docs/", docs.Handler())
 
 	srv.HandleFunc("/ws/room/{room_id}", func(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 		roomID := r.PathValue("room_id")
