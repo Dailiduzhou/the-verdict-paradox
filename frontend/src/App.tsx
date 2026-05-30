@@ -400,7 +400,12 @@ export default function App() {
       }
     }
 
-    const onKeyDown = () => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      // Backdoor: go straight to game from splash.
+      if (view === 'splash' && e.key === 'Backspace') {
+        transitionTo('game')
+        return
+      }
       void start()
     }
 
