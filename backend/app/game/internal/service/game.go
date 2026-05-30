@@ -13,13 +13,15 @@ type GameService struct {
 	pb.UnimplementedGameServer
 	userRepo  biz.UserRepo
 	matchRepo biz.MatchRepo
+	gameRepo  biz.GameRepo
 	log       *log.Helper
 }
 
-func NewGameService(userRepo biz.UserRepo, matchRepo biz.MatchRepo, logger log.Logger) *GameService {
+func NewGameService(userRepo biz.UserRepo, matchRepo biz.MatchRepo, gameRepo biz.GameRepo, logger log.Logger) *GameService {
 	return &GameService{
 		userRepo:  userRepo,
 		matchRepo: matchRepo,
+		gameRepo:  gameRepo,
 		log:       log.NewHelper(logger),
 	}
 }
@@ -70,8 +72,21 @@ func (s *GameService) GetMatchStatus(ctx context.Context, req *pb.GetMatchStatus
 		return nil, err
 	}
 
-	return &pb.GetMatchStatusReply{
+	reply := &pb.GetMatchStatusReply{
 		Status: status,
 		RoomID: roomID,
-	}, nil
+	}
+
+	if status == "IN_GAME" && roomID != "" {
+		session, err := s.gameRepo.LoadSession(ctx, roomID)
+		if err != nil {
+			s.log.WithContext(ctx).Errorf("load game session failed: %v", err)
+		} else if session != nil {
+			for _, p := range session.Players {
+				reply.Users = append(reply.Users, p.Name)
+			}
+		}
+	}
+
+	return reply, nil
 }

@@ -95,6 +95,10 @@ components:
                     type: string
                 roomID:
                     type: string
+                users:
+                    type: array
+                    items:
+                        type: string
         GoogleProtobufAny:
             type: object
             properties:
