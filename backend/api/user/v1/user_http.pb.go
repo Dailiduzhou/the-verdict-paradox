@@ -22,6 +22,7 @@ const _ = http.SupportPackageIsVersion1
 const OperationUserDeleteUser = "/api.user.v1.User/DeleteUser"
 const OperationUserGetUser = "/api.user.v1.User/GetUser"
 const OperationUserLogin = "/api.user.v1.User/Login"
+const OperationUserRefreshToken = "/api.user.v1.User/RefreshToken"
 const OperationUserRegister = "/api.user.v1.User/Register"
 const OperationUserUpdateUser = "/api.user.v1.User/UpdateUser"
 
@@ -29,6 +30,7 @@ type UserHTTPServer interface {
 	DeleteUser(context.Context, *DeleteUserRequest) (*DeleteUserReply, error)
 	GetUser(context.Context, *GetUserRequest) (*UserInfo, error)
 	Login(context.Context, *LoginRequest) (*LoginReply, error)
+	RefreshToken(context.Context, *RefreshRequest) (*RefreshReply, error)
 	Register(context.Context, *RegisterRequest) (*RegisterReply, error)
 	UpdateUser(context.Context, *UpdateUserRequest) (*UserInfo, error)
 }
@@ -40,6 +42,7 @@ func RegisterUserHTTPServer(s *http.Server, srv UserHTTPServer) {
 	r.GET("/v1/users/{id}", _User_GetUser0_HTTP_Handler(srv))
 	r.PUT("/v1/users/{id}", _User_UpdateUser0_HTTP_Handler(srv))
 	r.DELETE("/v1/users/{id}", _User_DeleteUser0_HTTP_Handler(srv))
+	r.POST("/v1/users/refresh", _User_RefreshToken0_HTTP_Handler(srv))
 }
 
 func _User_Register0_HTTP_Handler(srv UserHTTPServer) func(ctx http.Context) error {
@@ -155,10 +158,33 @@ func _User_DeleteUser0_HTTP_Handler(srv UserHTTPServer) func(ctx http.Context) e
 	}
 }
 
+func _User_RefreshToken0_HTTP_Handler(srv UserHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in RefreshRequest
+		if err := ctx.Bind(&in); err != nil {
+			return err
+		}
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationUserRefreshToken)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.RefreshToken(ctx, req.(*RefreshRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*RefreshReply)
+		return ctx.Result(200, reply)
+	}
+}
+
 type UserHTTPClient interface {
 	DeleteUser(ctx context.Context, req *DeleteUserRequest, opts ...http.CallOption) (rsp *DeleteUserReply, err error)
 	GetUser(ctx context.Context, req *GetUserRequest, opts ...http.CallOption) (rsp *UserInfo, err error)
 	Login(ctx context.Context, req *LoginRequest, opts ...http.CallOption) (rsp *LoginReply, err error)
+	RefreshToken(ctx context.Context, req *RefreshRequest, opts ...http.CallOption) (rsp *RefreshReply, err error)
 	Register(ctx context.Context, req *RegisterRequest, opts ...http.CallOption) (rsp *RegisterReply, err error)
 	UpdateUser(ctx context.Context, req *UpdateUserRequest, opts ...http.CallOption) (rsp *UserInfo, err error)
 }
@@ -202,6 +228,19 @@ func (c *UserHTTPClientImpl) Login(ctx context.Context, in *LoginRequest, opts .
 	pattern := "/v1/users/login"
 	path := binding.EncodeURL(pattern, in, false)
 	opts = append(opts, http.Operation(OperationUserLogin))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "POST", path, in, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func (c *UserHTTPClientImpl) RefreshToken(ctx context.Context, in *RefreshRequest, opts ...http.CallOption) (*RefreshReply, error) {
+	var out RefreshReply
+	pattern := "/v1/users/refresh"
+	path := binding.EncodeURL(pattern, in, false)
+	opts = append(opts, http.Operation(OperationUserRefreshToken))
 	opts = append(opts, http.PathTemplate(pattern))
 	err := c.cc.Invoke(ctx, "POST", path, in, &out, opts...)
 	if err != nil {

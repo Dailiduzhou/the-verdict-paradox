@@ -29,3 +29,6 @@ func (s *UserService) UpdateUser(ctx context.Context, req *pb.UpdateUserRequest)
 func (s *UserService) DeleteUser(ctx context.Context, req *pb.DeleteUserRequest) (*pb.DeleteUserReply, error) {
     return &pb.DeleteUserReply{}, nil
 }
+func (s *UserService) RefreshToken(ctx context.Context, req *pb.RefreshRequest) (*pb.RefreshReply, error) {
+    return &pb.RefreshReply{}, nil
+}
