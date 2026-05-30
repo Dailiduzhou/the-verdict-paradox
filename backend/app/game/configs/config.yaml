@@ -9,7 +9,7 @@ server:
 data:
   database:
     driver: postgres
-    source: postgres://postgres:postgres@postgres:5432/ecommerce?sslmode=disable
+    source: postgres://postgres:postgres@postgres:5432/verdict?sslmode=disable
   redis:
     addr: redis:6379
     read_timeout: 0.2s
