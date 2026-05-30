@@ -1,7 +1,7 @@
 package server
 
 import (
-	v1 "github.com/Dailiduzhou/the-verdict-paradox/backend/api/helloworld/v1"
+	userv1 "github.com/Dailiduzhou/the-verdict-paradox/backend/api/user/v1"
 	"github.com/Dailiduzhou/the-verdict-paradox/backend/app/game/internal/conf"
 	"github.com/Dailiduzhou/the-verdict-paradox/backend/app/game/internal/service"
 
@@ -11,8 +11,8 @@ import (
 )
 
 // NewGRPCServer new a gRPC server.
-func NewGRPCServer(c *conf.Server, greeter *service.GreeterService, logger log.Logger) *grpc.Server {
-	var opts = []grpc.ServerOption{
+func NewGRPCServer(c *conf.Server, user *service.UserService, logger log.Logger) *grpc.Server {
+	opts := []grpc.ServerOption{
 		grpc.Middleware(
 			recovery.Recovery(),
 		),
@@ -27,6 +27,6 @@ func NewGRPCServer(c *conf.Server, greeter *service.GreeterService, logger log.L
 		opts = append(opts, grpc.Timeout(c.Grpc.Timeout.AsDuration()))
 	}
 	srv := grpc.NewServer(opts...)
-	v1.RegisterGreeterServer(srv, greeter)
+	userv1.RegisterGreeterServer(srv, user)
 	return srv
 }
