@@ -1,0 +1,560 @@
+openapi: "3.0.3"
+info:
+  title: "The Verdict Paradox API"
+  description: |
+    辩护悖论（The Verdict Paradox）— 多人在线推理游戏后端 API。
+
+    ## 认证
+    除注册/登录/刷新/验证接口外，所有接口需在 Header 中携带 JWT：
+    ```
+    Authorization: Bearer <access_token>
+    ```
+
+    ## WebSocket
+    游戏内实时通信通过 WebSocket 进行，详见 [WebSocket 协议](#websocket)。
+
+    ## 身份识别
+    游戏包含三种身份：`HUMAN`（真人）、`AI`（AI）、`SPY`（真人卧底）。
+    游戏目标：找出所有真正的 AI 玩家。
+  version: "1.0.0"
+  contact:
+    name: "The Verdict Paradox Team"
+
+servers:
+  - url: "http://localhost:8000"
+    description: "本地开发环境"
+
+tags:
+  - name: "User"
+    description: "用户注册 / 登录 / 信息管理"
+  - name: "Game"
+    description: "匹配 / 游戏状态"
+  - name: "WebSocket"
+    description: "游戏内实时通信"
+
+paths:
+  # ========== User Service ==========
+  /v1/users/register:
+    post:
+      tags: ["User"]
+      summary: "注册新用户"
+      operationId: "register"
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+            example:
+              name: "zhangsan"
+              password: "123456"
+      responses:
+        "200":
+          description: "注册成功，返回用户 ID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegisterReply"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/users/login:
+    post:
+      tags: ["User"]
+      summary: "用户登录"
+      operationId: "login"
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+            example:
+              phone: "zhangsan"
+              password: "123456"
+      responses:
+        "200":
+          description: "登录成功，返回 access token"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginReply"
+
+  /v1/users/refresh:
+    post:
+      tags: ["User"]
+      summary: "刷新 access token"
+      operationId: "refreshToken"
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshRequest"
+      responses:
+        "200":
+          description: "返回新的 access token 和 refresh token"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RefreshReply"
+
+  /v1/users/verify:
+    post:
+      tags: ["User"]
+      summary: "验证 token 是否有效"
+      operationId: "verifyToken"
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyRequest"
+      responses:
+        "200":
+          description: "返回 token 是否有效"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VerifyReply"
+
+  /v1/users/{id}:
+    get:
+      tags: ["User"]
+      summary: "获取用户信息"
+      operationId: "getUser"
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+      responses:
+        "200":
+          description: "用户信息"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserInfo"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: ["User"]
+      summary: "更新用户名"
+      operationId: "updateUser"
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserRequest"
+      responses:
+        "200":
+          description: "更新后的用户信息"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserInfo"
+    delete:
+      tags: ["User"]
+      summary: "删除用户"
+      operationId: "deleteUser"
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+      responses:
+        "200":
+          description: "删除成功"
+          content:
+            application/json:
+              schema:
+                type: "object"
+
+  # ========== Game Service ==========
+  /v1/game/start:
+    post:
+      tags: ["Game"]
+      summary: "开始匹配"
+      description: "玩家加入匹配池，等待 6 人满后自动开局"
+      operationId: "startMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StartMatchRequest"
+            example:
+              name: "zhangsan"
+      responses:
+        "200":
+          description: "加入匹配池成功"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StartMatchReply"
+
+  /v1/game/cancel:
+    post:
+      tags: ["Game"]
+      summary: "取消匹配"
+      operationId: "cancelMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CancelMatchRequest"
+            example:
+              name: "zhangsan"
+      responses:
+        "200":
+          description: "已取消匹配"
+        "409":
+          description: "可能已在游戏中，无法取消"
+
+  /v1/game/status/{matchid}:
+    get:
+      tags: ["Game"]
+      summary: "查询匹配/游戏状态"
+      operationId: "getMatchStatus"
+      parameters:
+        - name: "matchid"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+          description: "匹配 ID（用户名）"
+      responses:
+        "200":
+          description: "当前状态"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetMatchStatusReply"
+              example:
+                status: "IN_GAME"
+                roomID: "550e8400-e29b-41d4-a716-446655440000"
+                users:
+                  - "张三"
+                  - "李四"
+                  - "王五"
+                  - "赵六"
+                  - "摸鱼部部长"
+                  - "早八毁灭者"
+
+  # ========== WebSocket ==========
+  /ws/room/{room_id}:
+    get:
+      tags: ["WebSocket"]
+      summary: "游戏房间 WebSocket"
+      description: |
+        游戏内实时通信通过此 WebSocket 连接进行。
+        
+        **连接时需携带 query 参数 `token`（JWT access token）**
+
+        ### 服务端推送消息
+
+        #### game_started — 游戏开始
+        ```json
+        {
+          "action": "game_started",
+          "sender": "system",
+          "content": {
+            "your_role": "HUMAN",
+            "players": [
+              {"user_id": 1, "name": "张三", "alive": true},
+              {"user_id": 2, "name": "AI_1", "alive": true}
+            ]
+          }
+        }
+        ```
+
+        #### question — 新问题
+        ```json
+        {
+          "action": "question",
+          "sender": "system",
+          "content": {
+            "round": 1,
+            "question": "你最常用的社交媒体是什么？"
+          }
+        }
+        ```
+
+        #### all_answers — 全部回答（随机顺序）
+        回答阶段结束后，按随机顺序一次性推送所有玩家的回答：
+        ```json
+        {
+          "action": "all_answers",
+          "sender": "system",
+          "content": {
+            "round": 1,
+            "answers": [
+              {"user_id": 3, "name": "AI_2", "content": "微信吧，大家都在用"},
+              {"user_id": 1, "name": "张三", "content": "我最喜欢用微信"},
+              {"user_id": 4, "name": "李四", "content": "B站看视频多"},
+              {"user_id": 2, "name": "AI_1", "content": "我用微博看热搜"},
+              {"user_id": 5, "name": "王五", "content": "小红书"},
+              {"user_id": 6, "name": "赵六", "content": "抖音刷短视频"}
+            ]
+          }
+        }
+        ```
+
+        #### phase_change — 阶段切换
+        ```json
+        {
+          "action": "phase_change",
+          "sender": "system",
+          "content": {
+            "phase": "ANSWER",
+            "round": 1,
+            "timeout_s": 60
+          }
+        }
+        ```
+        阶段值：`WAITING` / `QUESTION` / `ANSWER` / `VOTE` / `RESULT` / `END`
+
+        #### round_result — 投票结果
+        ```json
+        {
+          "action": "round_result",
+          "sender": "system",
+          "content": {
+            "round": 1,
+            "eliminated": "李四",
+            "eliminated_id": 2,
+            "votes": {2: 4, 3: 1}
+          }
+        }
+        ```
+
+        #### game_over — 游戏结束
+        ```json
+        {
+          "action": "game_over",
+          "sender": "system",
+          "content": {
+            "winner": "HUMAN",
+            "rounds": 3,
+            "players": [
+              {"user_id": 1, "name": "张三", "role": "HUMAN", "alive": true},
+              {"user_id": 2, "name": "AI_1", "role": "AI", "alive": false}
+            ]
+          }
+        }
+        ```
+
+        ### 客户端发送消息
+
+        #### answer — 提交回答
+        ```json
+        {"action": "answer", "content": "我最喜欢用微信"}
+        ```
+
+        #### vote — 投票
+        ```json
+        {"action": "vote", "target_user_id": 3}
+        ```
+      operationId: "wsRoom"
+      security: []
+      parameters:
+        - name: "room_id"
+          in: "path"
+          required: true
+          schema:
+            type: "string"
+          description: "房间 UUID"
+        - name: "token"
+          in: "query"
+          required: true
+          schema:
+            type: "string"
+          description: "JWT access token"
+      responses:
+        "101":
+          description: "WebSocket 协议升级成功"
+        "401":
+          description: "token 无效或缺失"
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: "http"
+      scheme: "bearer"
+      bearerFormat: "JWT"
+      description: "登录接口返回的 access_token"
+
+  parameters:
+    UserId:
+      name: "id"
+      in: "path"
+      required: true
+      schema:
+        type: "integer"
+        format: "int64"
+      description: "用户 ID"
+
+  responses:
+    NotFound:
+      description: "资源不存在"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            code: 404
+            reason: "USER_NOT_FOUND"
+            message: "user not found"
+    InternalError:
+      description: "服务器内部错误"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            code: 500
+            reason: "DB_ERROR"
+            message: "failed to create user"
+
+  schemas:
+    # ---- User ----
+    RegisterRequest:
+      type: "object"
+      required: ["name", "password"]
+      properties:
+        name:
+          type: "string"
+          description: "用户名"
+          minLength: 1
+        password:
+          type: "string"
+          description: "密码"
+          minLength: 6
+    RegisterReply:
+      type: "object"
+      properties:
+        id:
+          type: "integer"
+          format: "int64"
+          description: "新用户 ID"
+
+    LoginRequest:
+      type: "object"
+      required: ["phone", "password"]
+      properties:
+        phone:
+          type: "string"
+          description: "用户名"
+        password:
+          type: "string"
+          description: "密码"
+    LoginReply:
+      type: "object"
+      properties:
+        id:
+          type: "integer"
+          format: "int64"
+        token:
+          type: "string"
+          description: "JWT access token"
+
+    RefreshRequest:
+      type: "object"
+      required: ["refresh_token"]
+      properties:
+        refresh_token:
+          type: "string"
+    RefreshReply:
+      type: "object"
+      properties:
+        access_token:
+          type: "string"
+        refresh_token:
+          type: "string"
+
+    VerifyRequest:
+      type: "object"
+      properties:
+        token:
+          type: "string"
+    VerifyReply:
+      type: "object"
+      properties:
+        valid:
+          type: "boolean"
+
+    UpdateUserRequest:
+      type: "object"
+      properties:
+        id:
+          type: "integer"
+          format: "int64"
+        name:
+          type: "string"
+
+    UserInfo:
+      type: "object"
+      properties:
+        id:
+          type: "integer"
+          format: "int64"
+        name:
+          type: "string"
+        created_at:
+          type: "string"
+          format: "date-time"
+
+    # ---- Game ----
+    StartMatchRequest:
+      type: "object"
+      required: ["name"]
+      properties:
+        name:
+          type: "string"
+          description: "用户名"
+    StartMatchReply:
+      type: "object"
+      properties:
+        matchID:
+          type: "string"
+
+    CancelMatchRequest:
+      type: "object"
+      properties:
+        name:
+          type: "string"
+
+    GetMatchStatusReply:
+      type: "object"
+      properties:
+        status:
+          type: "string"
+          enum: ["IDLE", "MATCHING", "IN_GAME"]
+          description: "IDLE=空闲, MATCHING=匹配中, IN_GAME=游戏中"
+        roomID:
+          type: "string"
+          description: "游戏房间 ID（IN_GAME 状态时有效）"
+        users:
+          type: "array"
+          description: "同房间玩家名字列表（仅 IN_GAME 状态返回，含 AI）"
+          items:
+            type: "string"
+
+    # ---- Common ----
+    ErrorResponse:
+      type: "object"
+      properties:
+        code:
+          type: "integer"
+          description: "HTTP 状态码"
+        reason:
+          type: "string"
+          description: "错误原因"
+        message:
+          type: "string"
+          description: "错误详情"
+
+security:
+  - BearerAuth: []

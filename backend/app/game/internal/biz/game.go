@@ -35,45 +35,54 @@ func NewGameUsecase(gameRepo GameRepo, llmClient LLMClient, logger log.Logger) *
 	}
 }
 
-func (uc *GameUsecase) NewGameSession(roomID string, playerIDs []int64, names map[int64]string) *GameSession {
-	n := len(playerIDs)
-	players := make([]*PlayerInfo, n)
-
+func (uc *GameUsecase) NewGameSession(roomID string, realPlayers []int64, names map[int64]string) *GameSession {
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-	indices := rng.Perm(n)
+	aiNameOrder := rng.Perm(len(aiNames))
 
-	for i, idx := range indices {
-		uid := playerIDs[idx]
+	players := make([]*PlayerInfo, 0, maxPlayers)
+
+	aiID := int64(-1)
+	for i := 0; i < 2; i++ {
+		players = append(players, &PlayerInfo{
+			UserID: aiID,
+			Name:   aiNames[aiNameOrder[i]],
+			Role:   RoleAI,
+			Alive:  true,
+			ConnID: "AI",
+		})
+		aiID--
+	}
+
+	idx := rng.Perm(len(realPlayers))
+
+	for i, pidx := range idx {
 		var role PlayerRole
 		switch {
-		case i < 2:
-			role = RoleAI
-		case i < 3:
+		case i == 0:
 			role = RoleHumanSpy
 		default:
 			role = RoleHuman
 		}
-		players[idx] = &PlayerInfo{
+		uid := realPlayers[pidx]
+		players = append(players, &PlayerInfo{
 			UserID: uid,
 			Name:   names[uid],
 			Role:   role,
 			Alive:  true,
 			ConnID: "",
-		}
-		if role == RoleAI {
-			players[idx].ConnID = "AI"
-		}
+		})
 	}
 
 	return &GameSession{
-		RoomID:       roomID,
-		Phase:        PhaseWaiting,
-		Round:        0,
-		Players:      players,
-		ChatHistory:  make([]*ChatMessage, 0),
-		RoundLogs:    make([]*RoundLog, 0),
-		UsedQuestions: make(map[int]bool),
-		StartedAt:    time.Now(),
+		RoomID:              roomID,
+		Phase:               PhaseWaiting,
+		Round:               0,
+		Players:             players,
+		ChatHistory:         make([]*ChatMessage, 0),
+		RoundLogs:           make([]*RoundLog, 0),
+		UsedQuestions:       make(map[int]bool),
+		CurrentRoundAnswers: nil,
+		StartedAt:           time.Now(),
 	}
 }
 
@@ -104,7 +113,7 @@ func (uc *GameUsecase) SubmitAnswer(session *GameSession, userID int64, answer s
 
 	for _, p := range session.Players {
 		if p.UserID == userID && p.Alive {
-			session.ChatHistory = append(session.ChatHistory, &ChatMessage{
+			session.CurrentRoundAnswers = append(session.CurrentRoundAnswers, &ChatMessage{
 				Round:   currentRound,
 				Phase:   "answer",
 				UserID:  userID,
@@ -121,13 +130,23 @@ func (uc *GameUsecase) SubmitAnswer(session *GameSession, userID int64, answer s
 }
 
 func (uc *GameUsecase) RecordAIAnswer(session *GameSession, userID int64, name string, answer string) {
-	session.ChatHistory = append(session.ChatHistory, &ChatMessage{
+	session.CurrentRoundAnswers = append(session.CurrentRoundAnswers, &ChatMessage{
 		Round:   session.Round,
 		Phase:   "answer",
 		UserID:  userID,
 		Name:    name,
 		Content: answer,
 	})
+}
+
+func (uc *GameUsecase) ShuffleAndCommitAnswers(session *GameSession) {
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	rng.Shuffle(len(session.CurrentRoundAnswers), func(i, j int) {
+		session.CurrentRoundAnswers[i], session.CurrentRoundAnswers[j] = session.CurrentRoundAnswers[j], session.CurrentRoundAnswers[i]
+	})
+
+	session.ChatHistory = append(session.ChatHistory, session.CurrentRoundAnswers...)
+	session.CurrentRoundAnswers = nil
 }
 
 func (uc *GameUsecase) SubmitVote(session *GameSession, voterID, targetID int64) (allDone bool) {
@@ -232,6 +251,7 @@ func (uc *GameUsecase) BeginRound(session *GameSession) {
 	session.AnswerCount = 0
 	session.VoteCount = 0
 	session.PendingAI = true
+	session.CurrentRoundAnswers = nil
 }
 
 func (uc *GameUsecase) AllVotesDone(session *GameSession) bool {
@@ -240,12 +260,16 @@ func (uc *GameUsecase) AllVotesDone(session *GameSession) bool {
 }
 
 func (uc *GameUsecase) GenerateAIAnswers(ctx context.Context, session *GameSession) error {
+	fullHistory := make([]*ChatMessage, 0, len(session.ChatHistory)+len(session.CurrentRoundAnswers))
+	fullHistory = append(fullHistory, session.ChatHistory...)
+	fullHistory = append(fullHistory, session.CurrentRoundAnswers...)
+
 	for _, p := range session.Players {
 		if p.Role != RoleAI || !p.Alive {
 			continue
 		}
 
-		answer, err := uc.llmClient.GenerateAnswer(ctx, p.Name, session.ChatHistory, session.Question, "")
+		answer, err := uc.llmClient.GenerateAnswer(ctx, p.Name, fullHistory, session.Question, "")
 		if err != nil {
 			uc.log.WithContext(ctx).Errorf("AI answer generation failed for %s: %v", p.Name, err)
 			answer = "我觉得这个问题很有趣，但我需要更多时间思考。"

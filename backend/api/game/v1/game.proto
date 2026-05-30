@@ -46,5 +46,5 @@ message GetMatchStatusRequest {
 message GetMatchStatusReply {
   string status = 1;
   string roomID = 2;
+  repeated string users = 3;
 }
-
