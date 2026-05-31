@@ -95,31 +95,30 @@ body {
 
 .loginField {
   position: absolute;
-  left: calc(71 / 1920 * 100%);
+  left: calc(300 / 1920 * 100%);
   width: calc(739 / 1920 * 100%);
   height: calc(94 / 1080 * 100%);
 
-  /* shift relative to the field itself */
-  transform: translate(31%, 110%);
-
-  border-radius: 25px;
+  border-radius: calc(25 / 1080 * 100dvh);
   opacity: 1;
 
   box-sizing: border-box;
   border: none;
   background: transparent;
-  color: #111;
-  padding: 0 22px;
-  font-weight: 600;
-  font-size: calc(28 / 1080 * 100dvh);
+  color: #3D3D3D;
+  padding: 0 calc(22 / 1920 * 100vw);
+  font-weight: 700;
+  font-style: italic;
+  font-size: calc(40 / 1080 * 100dvh);
   line-height: 1.1;
-  font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+  font-family: "YouSheBiaoTiHei", system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
   outline: none;
 }
 
 .loginField::placeholder {
-  color: rgba(0, 0, 0, 0.45);
+  color: rgba(61, 61, 61, 0.45);
   font-weight: 500;
+  font-style: italic;
 }
 
 .loginField:focus {
@@ -127,34 +126,33 @@ body {
 }
 
 .loginFieldUser {
-  top: calc(328 / 1080 * 100%);
+  top: calc(428 / 1080 * 100%);
 }
 
 .loginFieldPass {
-  top: calc(470 / 1080 * 100%);
+  top: calc(564 / 1080 * 100%);
+  letter-spacing: calc(6 / 1080 * 100dvh);
 }
 
 .loginBtn {
   position: absolute;
-  left: calc(71 / 1920 * 100%);
-  top: calc(612 / 1080 * 100%);
+  left: calc(290 / 1920 * 100%);
+  top: calc(744 / 1080 * 100%);
   width: calc(739 / 1920 * 100%);
   height: calc(94 / 1080 * 100%);
-
-  /* match inputs */
-  transform: translate(30%, 140%);
-  border-radius: 25px;
+  border-radius: calc(25 / 1080 * 100dvh);
   opacity: 1;
 
   box-sizing: border-box;
   border: none;
   background: transparent;
-  padding: 0 22px;
-  color: rgba(0, 0, 0, 0.55);
+  padding: 0 calc(22 / 1920 * 100vw);
+  color: #3D3D3D;
   font-weight: 700;
-  font-size: calc(30 / 1080 * 100dvh);
+  font-style: italic;
+  font-size: calc(40 / 1080 * 100dvh);
   line-height: 1;
-  font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+  font-family: "YouSheBiaoTiHei", system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
 }
 
 .loginBtn:disabled {
@@ -163,11 +161,11 @@ body {
 }
 
 .loginBtn:disabled:hover {
-  color: rgba(0, 0, 0, 0.55);
+  color: #3D3D3D;
 }
 
 .loginBtn:hover {
-  color: rgba(0, 0, 0, 0.7);
+  color: #5D5D5D;
 }
 
 .loginBtn:active {
@@ -180,19 +178,23 @@ body {
 
 .registerBtn {
   position: absolute;
-  left: calc(640 / 1920 * 100%);
+  left: calc(620 / 1920 * 100%);
   top: calc(860 / 1080 * 100%);
 
-  width: 30px;
-  height: 20px;
-  transform: translate(0%, 0%);
+  width: auto;
+  height: auto;
 
   box-sizing: border-box;
-  border: 1px solid rgba(0, 0, 0, 0.35);
-  border-radius: 4px;
+  border: none;
   background: transparent;
   padding: 0;
   cursor: pointer;
+  font-weight: 700;
+  font-style: italic;
+  font-size: calc(34 / 1095 * 100dvh);
+  line-height: 1;
+  font-family: "YouSheBiaoTiHei", system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+  color: #A9A9A9;
 }
 
 .registerBtn:disabled {
@@ -201,7 +203,7 @@ body {
 }
 
 .registerBtn:hover {
-  border-color: rgba(0, 0, 0, 0.55);
+  color: #C0C0C0;
 }
 
 .registerBtn:active {
@@ -216,47 +218,49 @@ body {
 .registerOverlay {
   position: absolute;
   inset: 0;
-  transform: translateY(-60px);
+  transform: translateY(calc(-60 / 1080 * 100%));
 }
 
 .registerFieldUser {
-  top: calc(328 / 1080 * 100%);
+  top: calc(414 / 1080 * 100%);
 }
 
 .registerFieldPass {
-  top: calc(470 / 1080 * 100%);
+  top: calc(542 / 1080 * 100%);
+  letter-spacing: calc(6 / 1080 * 100dvh);
 }
 
 .registerFieldPass2 {
-  top: calc(612 / 1080 * 100%);
+  top: calc(668 / 1080 * 100%);
+  letter-spacing: calc(6 / 1080 * 100dvh);
 }
 
 .registerSubmit {
   position: absolute;
-  left: calc(71 / 1920 * 100%);
-  top: calc(754 / 1080 * 100%);
+  left: calc(70 / 1920 * 100%);
+  top: calc(662 / 1080 * 100%);
   width: calc(739 / 1920 * 100%);
   height: calc(94 / 1080 * 100%);
 
   transform: translate(30%, 150%);
-  border-radius: 25px;
+  border-radius: calc(25 / 1080 * 100dvh);
   opacity: 1;
-
   box-sizing: border-box;
   border: none;
   background: transparent;
-  padding: 0 22px;
-  color: rgba(0, 0, 0, 0.55);
+  padding: 0 calc(22 / 1920 * 100vw);
+  color: #3D3D3D;
   font-weight: 700;
-  font-size: calc(30 / 1080 * 100dvh);
+  font-style: italic;
+  font-size: calc(40 / 1080 * 100dvh);
   line-height: 1;
-  font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+  font-family: "YouSheBiaoTiHei", system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
   text-align: center;
   cursor: pointer;
 }
 
 .registerSubmit:hover {
-  color: rgba(0, 0, 0, 0.7);
+  color: #5D5D5D;
 }
 
 .registerSubmit:active {
@@ -273,7 +277,7 @@ body {
 }
 
 .registerSubmit:disabled:hover {
-  color: rgba(0, 0, 0, 0.55);
+  color: #3D3D3D;
 }
 
 .game {
@@ -352,7 +356,7 @@ body {
 .tutorialBtn {
   position: absolute;
   bottom: 0;
-  left: calc(100% * 6 / 8 - 82 / 1920 * 100vw);
+  left: calc(100% * 6 / 8 - 102 / 1920 * 100vw);
   right: calc(100% * 0.5 / 8 + 82 / 1920 * 100vw);
   height: calc(156 / 1095 * 100%);
 
@@ -495,6 +499,18 @@ body {
 
 .pCircle--show {
   /* scale controlled by inline style */
+}
+
+
+.pCircle--elim {
+  transition: transform 0.8s ease, opacity 0.8s ease;
+  transform: scale(0) !important;
+  opacity: 0;
+}
+
+.pCircle--gone {
+  transform: scale(0) !important;
+  opacity: 0;
 }
 
 .circleLabel {
@@ -714,3 +730,79 @@ body {
   overflow-wrap: break-word;
 }
 
+
+.gameOverOverlay {
+  position: absolute;
+  inset: 0;
+  z-index: 15;
+  background: transparent;
+  display: grid;
+  place-items: center;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+  pointer-events: none;
+}
+
+.gameOverOverlay--show {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.gameOverImg {
+  max-width: calc(1680 / 1095 * 100dvh);
+  max-height: calc(5513 / 1095 * 100dvh);
+  transform: translateX(15%) translateY(5%);
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.screenFade .enterBtn,
+.screenFade .enterBtnInner,
+.screenFade .tutorialBtn,
+.screenFade .tutorialIcon,
+.screenFade .settingsBtn,
+.screenFade .settingsIcon,
+.screenFade .startrailWrap,
+.screenFade .startrailImg,
+.screenFade .playerCircles,
+.screenFade .pCircle,
+.screenFade .circleLabel,
+.screenFade .speakBanner,
+.screenFade .speakBannerImg,
+.screenFade .answerBox,
+.screenFade .answerBoxQuestion,
+.screenFade .answerBoxDivider,
+.screenFade .answerBoxInput,
+.screenFade .voteGrid,
+.screenFade .voteCard,
+.screenFade .voteCircle,
+.screenFade .voteName,
+.screenFade .voteContent,
+.screenFade .roleOverlay,
+.screenFade .roleSvg,
+.screenFade .gameBottom {
+  opacity: 0 !important;
+  transition: opacity 0.5s ease;
+  pointer-events: none;
+}
+
+.splashHint {
+  position: absolute;
+  right: 40px;
+  bottom: 40px;
+  font-weight: 700;
+  font-style: italic;
+  font-size: calc(42 / 1095 * 100dvh);
+  line-height: 1;
+  font-family: "YouSheBiaoTiHei", system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+  color: #AFAFAF;
+  animation: blink 1.4s ease-in-out infinite;
+  pointer-events: none;
+  user-select: none;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.2; }
+}
