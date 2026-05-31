@@ -28,6 +28,7 @@ var publicOps = map[string]bool{
 	userv1.OperationUserLogin:        true,
 	userv1.OperationUserVerify:       true,
 	userv1.OperationUserRefreshToken: true,
+	userv1.OperationUserHealth:       true,
 }
 
 // NewHTTPServer new an HTTP server.
