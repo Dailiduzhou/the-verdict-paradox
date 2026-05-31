@@ -33,7 +33,7 @@ services:
   game:
     build:
       context: .
-      dockerfile: app/game/Dockerfile
+      dockerfile: backend/app/game/Dockerfile
       args:
         - GOPROXY=https://goproxy.cn
     container_name: verdict-game
