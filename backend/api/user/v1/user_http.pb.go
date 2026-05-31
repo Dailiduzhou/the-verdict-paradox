@@ -21,6 +21,7 @@ const _ = http.SupportPackageIsVersion1
 
 const OperationUserDeleteUser = "/api.user.v1.User/DeleteUser"
 const OperationUserGetUser = "/api.user.v1.User/GetUser"
+const OperationUserHealth = "/api.user.v1.User/Health"
 const OperationUserLogin = "/api.user.v1.User/Login"
 const OperationUserRefreshToken = "/api.user.v1.User/RefreshToken"
 const OperationUserRegister = "/api.user.v1.User/Register"
@@ -30,6 +31,7 @@ const OperationUserVerify = "/api.user.v1.User/Verify"
 type UserHTTPServer interface {
 	DeleteUser(context.Context, *DeleteUserRequest) (*DeleteUserReply, error)
 	GetUser(context.Context, *GetUserRequest) (*UserInfo, error)
+	Health(context.Context, *HealthCheckRequest) (*HealthCheckReply, error)
 	Login(context.Context, *LoginRequest) (*LoginReply, error)
 	RefreshToken(context.Context, *RefreshRequest) (*RefreshReply, error)
 	Register(context.Context, *RegisterRequest) (*RegisterReply, error)
@@ -46,6 +48,7 @@ func RegisterUserHTTPServer(s *http.Server, srv UserHTTPServer) {
 	r.DELETE("/v1/users/{id}", _User_DeleteUser0_HTTP_Handler(srv))
 	r.POST("/v1/users/refresh", _User_RefreshToken0_HTTP_Handler(srv))
 	r.POST("/v1/users/verify", _User_Verify0_HTTP_Handler(srv))
+	r.GET("/v1/health", _User_Health0_HTTP_Handler(srv))
 }
 
 func _User_Register0_HTTP_Handler(srv UserHTTPServer) func(ctx http.Context) error {
@@ -205,9 +208,29 @@ func _User_Verify0_HTTP_Handler(srv UserHTTPServer) func(ctx http.Context) error
 	}
 }
 
+func _User_Health0_HTTP_Handler(srv UserHTTPServer) func(ctx http.Context) error {
+	return func(ctx http.Context) error {
+		var in HealthCheckRequest
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationUserHealth)
+		h := ctx.Middleware(func(ctx context.Context, req interface{}) (interface{}, error) {
+			return srv.Health(ctx, req.(*HealthCheckRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply := out.(*HealthCheckReply)
+		return ctx.Result(200, reply)
+	}
+}
+
 type UserHTTPClient interface {
 	DeleteUser(ctx context.Context, req *DeleteUserRequest, opts ...http.CallOption) (rsp *DeleteUserReply, err error)
 	GetUser(ctx context.Context, req *GetUserRequest, opts ...http.CallOption) (rsp *UserInfo, err error)
+	Health(ctx context.Context, req *HealthCheckRequest, opts ...http.CallOption) (rsp *HealthCheckReply, err error)
 	Login(ctx context.Context, req *LoginRequest, opts ...http.CallOption) (rsp *LoginReply, err error)
 	RefreshToken(ctx context.Context, req *RefreshRequest, opts ...http.CallOption) (rsp *RefreshReply, err error)
 	Register(ctx context.Context, req *RegisterRequest, opts ...http.CallOption) (rsp *RegisterReply, err error)
@@ -241,6 +264,19 @@ func (c *UserHTTPClientImpl) GetUser(ctx context.Context, in *GetUserRequest, op
 	pattern := "/v1/users/{id}"
 	path := binding.EncodeURL(pattern, in, true)
 	opts = append(opts, http.Operation(OperationUserGetUser))
+	opts = append(opts, http.PathTemplate(pattern))
+	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+func (c *UserHTTPClientImpl) Health(ctx context.Context, in *HealthCheckRequest, opts ...http.CallOption) (*HealthCheckReply, error) {
+	var out HealthCheckReply
+	pattern := "/v1/health"
+	path := binding.EncodeURL(pattern, in, true)
+	opts = append(opts, http.Operation(OperationUserHealth))
 	opts = append(opts, http.PathTemplate(pattern))
 	err := c.cc.Invoke(ctx, "GET", path, nil, &out, opts...)
 	if err != nil {

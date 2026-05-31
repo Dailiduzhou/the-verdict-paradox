@@ -643,6 +643,78 @@ func (x *VerifyReply) GetValid() bool {
 	return false
 }
 
+type HealthCheckRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *HealthCheckRequest) Reset() {
+	*x = HealthCheckRequest{}
+	mi := &file_api_user_v1_user_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HealthCheckRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HealthCheckRequest) ProtoMessage() {}
+
+func (x *HealthCheckRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_user_v1_user_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HealthCheckRequest.ProtoReflect.Descriptor instead.
+func (*HealthCheckRequest) Descriptor() ([]byte, []int) {
+	return file_api_user_v1_user_proto_rawDescGZIP(), []int{13}
+}
+
+type HealthCheckReply struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *HealthCheckReply) Reset() {
+	*x = HealthCheckReply{}
+	mi := &file_api_user_v1_user_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HealthCheckReply) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HealthCheckReply) ProtoMessage() {}
+
+func (x *HealthCheckReply) ProtoReflect() protoreflect.Message {
+	mi := &file_api_user_v1_user_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HealthCheckReply.ProtoReflect.Descriptor instead.
+func (*HealthCheckReply) Descriptor() ([]byte, []int) {
+	return file_api_user_v1_user_proto_rawDescGZIP(), []int{14}
+}
+
 var File_api_user_v1_user_proto protoreflect.FileDescriptor
 
 const file_api_user_v1_user_proto_rawDesc = "" +
@@ -681,7 +753,9 @@ const file_api_user_v1_user_proto_rawDesc = "" +
 	"\rVerifyRequest\x12\x14\n" +
 	"\x05token\x18\x01 \x01(\tR\x05token\"#\n" +
 	"\vVerifyReply\x12\x14\n" +
-	"\x05valid\x18\x01 \x01(\bR\x05valid2\xa2\x05\n" +
+	"\x05valid\x18\x01 \x01(\bR\x05valid\"\x14\n" +
+	"\x12HealthCheckRequest\"\x12\n" +
+	"\x10HealthCheckReply2\x80\x06\n" +
 	"\x04User\x12c\n" +
 	"\bRegister\x12\x1c.api.user.v1.RegisterRequest\x1a\x1a.api.user.v1.RegisterReply\"\x1d\x82\xd3\xe4\x93\x02\x17:\x01*\"\x12/v1/users/register\x12W\n" +
 	"\x05Login\x12\x19.api.user.v1.LoginRequest\x1a\x17.api.user.v1.LoginReply\"\x1a\x82\xd3\xe4\x93\x02\x14:\x01*\"\x0f/v1/users/login\x12U\n" +
@@ -691,7 +765,9 @@ const file_api_user_v1_user_proto_rawDesc = "" +
 	"\n" +
 	"DeleteUser\x12\x1e.api.user.v1.DeleteUserRequest\x1a\x1c.api.user.v1.DeleteUserReply\"\x16\x82\xd3\xe4\x93\x02\x10*\x0e/v1/users/{id}\x12d\n" +
 	"\fRefreshToken\x12\x1b.api.user.v1.RefreshRequest\x1a\x19.api.user.v1.RefreshReply\"\x1c\x82\xd3\xe4\x93\x02\x16:\x01*\"\x11/v1/users/refresh\x12[\n" +
-	"\x06Verify\x12\x1a.api.user.v1.VerifyRequest\x1a\x18.api.user.v1.VerifyReply\"\x1b\x82\xd3\xe4\x93\x02\x15:\x01*\"\x10/v1/users/verifyBR\n" +
+	"\x06Verify\x12\x1a.api.user.v1.VerifyRequest\x1a\x18.api.user.v1.VerifyReply\"\x1b\x82\xd3\xe4\x93\x02\x15:\x01*\"\x10/v1/users/verify\x12\\\n" +
+	"\x06Health\x12\x1f.api.user.v1.HealthCheckRequest\x1a\x1d.api.user.v1.HealthCheckReply\"\x12\x82\xd3\xe4\x93\x02\f\x12\n" +
+	"/v1/healthBR\n" +
 	"\vapi.user.v1P\x01ZAgithub.com/Dailiduzhou/the-verdict-paradox/backend/api/user/v1;v1b\x06proto3"
 
 var (
@@ -706,7 +782,7 @@ func file_api_user_v1_user_proto_rawDescGZIP() []byte {
 	return file_api_user_v1_user_proto_rawDescData
 }
 
-var file_api_user_v1_user_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
+var file_api_user_v1_user_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
 var file_api_user_v1_user_proto_goTypes = []any{
 	(*RegisterRequest)(nil),       // 0: api.user.v1.RegisterRequest
 	(*RegisterReply)(nil),         // 1: api.user.v1.RegisterReply
@@ -721,10 +797,12 @@ var file_api_user_v1_user_proto_goTypes = []any{
 	(*RefreshReply)(nil),          // 10: api.user.v1.RefreshReply
 	(*VerifyRequest)(nil),         // 11: api.user.v1.VerifyRequest
 	(*VerifyReply)(nil),           // 12: api.user.v1.VerifyReply
-	(*timestamppb.Timestamp)(nil), // 13: google.protobuf.Timestamp
+	(*HealthCheckRequest)(nil),    // 13: api.user.v1.HealthCheckRequest
+	(*HealthCheckReply)(nil),      // 14: api.user.v1.HealthCheckReply
+	(*timestamppb.Timestamp)(nil), // 15: google.protobuf.Timestamp
 }
 var file_api_user_v1_user_proto_depIdxs = []int32{
-	13, // 0: api.user.v1.UserInfo.created_at:type_name -> google.protobuf.Timestamp
+	15, // 0: api.user.v1.UserInfo.created_at:type_name -> google.protobuf.Timestamp
 	0,  // 1: api.user.v1.User.Register:input_type -> api.user.v1.RegisterRequest
 	2,  // 2: api.user.v1.User.Login:input_type -> api.user.v1.LoginRequest
 	4,  // 3: api.user.v1.User.GetUser:input_type -> api.user.v1.GetUserRequest
@@ -732,15 +810,17 @@ var file_api_user_v1_user_proto_depIdxs = []int32{
 	6,  // 5: api.user.v1.User.DeleteUser:input_type -> api.user.v1.DeleteUserRequest
 	9,  // 6: api.user.v1.User.RefreshToken:input_type -> api.user.v1.RefreshRequest
 	11, // 7: api.user.v1.User.Verify:input_type -> api.user.v1.VerifyRequest
-	1,  // 8: api.user.v1.User.Register:output_type -> api.user.v1.RegisterReply
-	3,  // 9: api.user.v1.User.Login:output_type -> api.user.v1.LoginReply
-	8,  // 10: api.user.v1.User.GetUser:output_type -> api.user.v1.UserInfo
-	8,  // 11: api.user.v1.User.UpdateUser:output_type -> api.user.v1.UserInfo
-	7,  // 12: api.user.v1.User.DeleteUser:output_type -> api.user.v1.DeleteUserReply
-	10, // 13: api.user.v1.User.RefreshToken:output_type -> api.user.v1.RefreshReply
-	12, // 14: api.user.v1.User.Verify:output_type -> api.user.v1.VerifyReply
-	8,  // [8:15] is the sub-list for method output_type
-	1,  // [1:8] is the sub-list for method input_type
+	13, // 8: api.user.v1.User.Health:input_type -> api.user.v1.HealthCheckRequest
+	1,  // 9: api.user.v1.User.Register:output_type -> api.user.v1.RegisterReply
+	3,  // 10: api.user.v1.User.Login:output_type -> api.user.v1.LoginReply
+	8,  // 11: api.user.v1.User.GetUser:output_type -> api.user.v1.UserInfo
+	8,  // 12: api.user.v1.User.UpdateUser:output_type -> api.user.v1.UserInfo
+	7,  // 13: api.user.v1.User.DeleteUser:output_type -> api.user.v1.DeleteUserReply
+	10, // 14: api.user.v1.User.RefreshToken:output_type -> api.user.v1.RefreshReply
+	12, // 15: api.user.v1.User.Verify:output_type -> api.user.v1.VerifyReply
+	14, // 16: api.user.v1.User.Health:output_type -> api.user.v1.HealthCheckReply
+	9,  // [9:17] is the sub-list for method output_type
+	1,  // [1:9] is the sub-list for method input_type
 	1,  // [1:1] is the sub-list for extension type_name
 	1,  // [1:1] is the sub-list for extension extendee
 	0,  // [0:1] is the sub-list for field type_name
@@ -757,7 +837,7 @@ func file_api_user_v1_user_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_user_v1_user_proto_rawDesc), len(file_api_user_v1_user_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   13,
+			NumMessages:   15,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
