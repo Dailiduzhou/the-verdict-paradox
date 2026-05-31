@@ -10,11 +10,15 @@ import spySvg from './assets/spy.svg'
 import startrailSvg from './assets/startrail.svg'
 import speakSvg from './assets/speak.svg'
 import verdictSvg from './assets/verdict.svg'
+import humanWinSvg from './assets/humanWin.svg'
+import spyWinSvg from './assets/spyWin.svg'
+import aiWinSvg from './assets/aiWin.svg'
 
 type View = 'splash' | 'login' | 'register' | 'game'
 
 const TOKEN_KEY = 'token'
 const USERNAME_KEY = 'username'
+const USER_ID_KEY = 'user_id'
 
 async function login(username: string, password: string) {
   const res = await fetch('/v1/users/login', {
@@ -27,9 +31,9 @@ async function login(username: string, password: string) {
   })
 
   if (!res.ok) throw new Error('login_failed')
-  const data = (await res.json()) as { token?: string }
+  const data = (await res.json()) as { id?: number; token?: string }
   if (!data.token) throw new Error('missing_token')
-  return data.token
+  return { token: data.token, id: data.id ?? 0 }
 }
 
 async function startGame(name: string, token: string) {
@@ -106,7 +110,7 @@ const TEXT_LABEL_CLASS: Record<number, string> = {
   300: 'circleLabelLeft',
 }
 
-function PlayerCircles(props: { players: { user_id: number; name: string }[]; anim: boolean }) {
+function PlayerCircles(props: { players: { user_id: number; name: string }[]; anim: boolean; eliminatedIds: number[]; eliminatedCurrent: number | null }) {
   const [, forceUpdate] = useState(0)
   useEffect(() => {
     const onResize = () => forceUpdate((n) => n + 1)
@@ -122,19 +126,29 @@ function PlayerCircles(props: { players: { user_id: number; name: string }[]; an
     const rad = (angle * Math.PI) / 180
     const x = Math.sin(rad) * r
     const y = -Math.cos(rad) * r
+    const isElim = props.eliminatedIds.includes(p.user_id)
+    const isCurrentElim = props.eliminatedCurrent === p.user_id
 
     return (
       <div
         key={p.user_id}
-        className={props.anim ? 'pCircle pCircle--show' : 'pCircle'}
+        className={
+          isCurrentElim
+            ? 'pCircle pCircle--elim'
+            : isElim
+              ? 'pCircle pCircle--gone'
+              : props.anim
+                ? 'pCircle pCircle--show'
+                : 'pCircle'
+        }
         style={{
-          transform: `translate(calc(-50% + ${x}px), calc(-50% + ${y}px)) scale(${props.anim ? 1 : 0})`,
+          transform: `translate(calc(-50% + ${x}px), calc(-50% + ${y}px)) scale(${isElim ? 0 : props.anim ? 1 : 0})`,
           width: d,
           height: d,
           background: CIRCLE_COLORS[i],
         }}
       >
-        <span className={`circleLabel ${TEXT_LABEL_CLASS[angle] ?? ''} ${props.anim ? 'circleLabel--show' : ''}`}>
+        <span className={`circleLabel ${TEXT_LABEL_CLASS[angle] ?? ''} ${props.anim && !isElim ? 'circleLabel--show' : ''}`}>
           {p.name}
         </span>
       </div>
@@ -155,6 +169,7 @@ function Game(props: { toast: (message: string) => void; blocked: boolean }) {
   const pollTimerRef = useRef<number | null>(null)
   const wsRef = useRef<WebSocket | null>(null)
   const [connectedRoomID, setConnectedRoomID] = useState<string | null>(null)
+  const [currentUserId, setCurrentUserId] = useState<number | null>(null)
   const [roleReveal, setRoleReveal] = useState<'HUMAN' | 'SPY' | null>(null)
   const [roleFadeIn, setRoleFadeIn] = useState(false)
   const [gameWaiting, setGameWaiting] = useState(false)
@@ -179,6 +194,19 @@ function Game(props: { toast: (message: string) => void; blocked: boolean }) {
   const [selectedVote, setSelectedVote] = useState<number | null>(null)
   const [voteSent, setVoteSent] = useState(false)
   const [voteDots, setVoteDots] = useState(1)
+  const [eliminatedIds, setEliminatedIds] = useState<number[]>([])
+  const [eliminatedCurrent, setEliminatedCurrent] = useState<number | null>(null)
+  const [gameOver, setGameOver] = useState(false)
+  const [gameOverSVG, setGameOverSVG] = useState('')
+  const [gameOverShow, setGameOverShow] = useState(false)
+  const [storedRole, setStoredRole] = useState('')
+  const storedRoleRef = useRef('')
+  const [gamePhase, setGamePhase] = useState<'none' | 'fadeOut'>('none')
+
+  useEffect(() => {
+    const uid = localStorage.getItem(USER_ID_KEY)
+    if (uid && !currentUserId) setCurrentUserId(Number(uid))
+  }, [currentUserId])
   const voteTimerRef = useRef<number | null>(null)
   const voteDotsRef = useRef<number | null>(null)
   const [answerText, setAnswerText] = useState('')
@@ -242,7 +270,7 @@ function Game(props: { toast: (message: string) => void; blocked: boolean }) {
   }, [voteBanner, voteBoxShow])
 
   const onPressStart = () => {
-    if (props.blocked || matching || answerSent || voteSent) return
+    if (props.blocked || matching || answerSent || voteSent || (currentUserId && eliminatedIds.includes(currentUserId))) return
     setPressed(true)
   }
 
@@ -310,7 +338,10 @@ function Game(props: { toast: (message: string) => void; blocked: boolean }) {
               if (msg.action === 'game_started') {
                 const role = msg.content?.your_role as string | undefined
                 const pls = msg.content?.players as { user_id: number; name: string }[] | undefined
-                if (pls) setPlayers(pls)
+                if (pls) {
+                  setPlayers(pls)
+                }
+                if (!storedRole && role) { storedRoleRef.current = role; setStoredRole(role) }
                 if (role === 'HUMAN' || role === 'SPY') {
                   setRoleReveal(role)
                   requestAnimationFrame(() => {
@@ -324,12 +355,17 @@ function Game(props: { toast: (message: string) => void; blocked: boolean }) {
                 const phase = msg.content?.phase as string | undefined
                 if (phase === 'WAITING') {
                   setGameWaiting(true)
+                  setVoting(false)
+                  setVoteBoxShow(false)
+                  setVoteBanner('none')
+                  setVoteSent(false)
                   setStartrailGrow(false)
                   requestAnimationFrame(() => {
                     requestAnimationFrame(() => setStartrailGrow(true))
                   })
                   circlesTimerRef.current = window.setTimeout(() => {
                     setShowCircles(true)
+                    setEliminatedCurrent(null)
                     requestAnimationFrame(() => {
                       requestAnimationFrame(() => setCirclesAnim(true))
                     })
@@ -396,6 +432,39 @@ function Game(props: { toast: (message: string) => void; blocked: boolean }) {
                   }, 500)
                 }
               }
+              if (msg.action === 'game_over') {
+                const winner = msg.content?.winner as string | undefined
+                if (winner === 'HUMAN') {
+                  setGameOverSVG(storedRoleRef.current === 'SPY' ? spyWinSvg : humanWinSvg)
+                } else {
+                  setGameOverSVG(aiWinSvg)
+                }
+                // Phase 1: fade out everything except background
+                setGamePhase('fadeOut')
+                window.setTimeout(() => {
+                  // Phase 2: clear all UI, show settlement
+                  setVoting(false)
+                  setAnswering(false)
+                  setGameWaiting(false)
+                  setShowCircles(false)
+                  setAnswerBanner('none')
+                  setVoteBanner('none')
+                  setAnswerBoxShow(false)
+                  setVoteBoxShow(false)
+                  setGameOver(true)
+                  setGameOverShow(false)
+                  requestAnimationFrame(() => {
+                    requestAnimationFrame(() => setGameOverShow(true))
+                  })
+                }, 500)
+              }
+              if (msg.action === 'round_result') {
+                const eid = msg.content?.eliminated_id as number | undefined
+                if (eid && eid !== 0) {
+                  setEliminatedIds((prev) => [...prev, eid])
+                  setEliminatedCurrent(eid)
+                }
+              }
               if (msg.action === 'all_answers') {
                 const ans = msg.content?.answers as { user_id: number; name: string; content: string }[] | undefined
                 if (ans) setRoundAnswers(ans)
@@ -438,9 +507,10 @@ function Game(props: { toast: (message: string) => void; blocked: boolean }) {
   }
 
   return (
-    <section className="game" aria-label="game">
+    <section className={`game ${gamePhase === 'fadeOut' ? 'screenFade' : ''}`} aria-label="game">
       <img className="gameBg" src={gameBgSvg} alt="" aria-hidden="true" />
-      <div className="gameBottom" aria-hidden="true" />
+      {!gameOver && <div className="gameBottom" aria-hidden="true" />}
+      {!gameOver && (
       <button
         className={pressed ? 'enterBtn enterBtn--pressed' : 'enterBtn'}
         type="button"
@@ -449,7 +519,7 @@ function Game(props: { toast: (message: string) => void; blocked: boolean }) {
         onPointerCancel={onPressEnd}
         onPointerLeave={onPressEnd}
         onClick={voting && voteBanner === 'done' ? submitVote : answering && answerBanner === 'done' ? submitAnswer : submit}
-        disabled={voting && voteBanner === 'done' ? voteSent : answering && answerBanner === 'done' ? answerSent : props.blocked || matching || !!connectedRoomID}
+        disabled={currentUserId && eliminatedIds.includes(currentUserId) ? true : voting && voteBanner === 'done' ? voteSent : answering && answerBanner === 'done' ? answerSent : props.blocked || matching || !!connectedRoomID}
       >
         <span className="enterBtnInner">
           {voteSent
@@ -471,7 +541,9 @@ function Game(props: { toast: (message: string) => void; blocked: boolean }) {
                             : 'Enter'}
         </span>
       </button>
+      )}
 
+      {!gameOver && (
       <button
         className={tutorialPressed ? 'tutorialBtn tutorialBtn--pressed' : 'tutorialBtn'}
         type="button"
@@ -484,7 +556,9 @@ function Game(props: { toast: (message: string) => void; blocked: boolean }) {
       >
         <img className="tutorialIcon" src={tutorialSvg} alt="" aria-hidden="true" />
       </button>
+      )}
 
+      {!gameOver && (
       <button
         className={settingsPressed ? 'settingsBtn settingsBtn--pressed' : 'settingsBtn'}
         type="button"
@@ -497,6 +571,7 @@ function Game(props: { toast: (message: string) => void; blocked: boolean }) {
       >
         <img className="settingsIcon" src={settingsSvg} alt="" aria-hidden="true" />
       </button>
+      )}
       {roleReveal && (
         <div className={roleFadeIn ? 'roleOverlay roleOverlay--show' : 'roleOverlay'} aria-hidden="true">
           <img className="roleSvg" src={roleReveal === 'HUMAN' ? humanSvg : spySvg} alt="" />
@@ -514,7 +589,7 @@ function Game(props: { toast: (message: string) => void; blocked: boolean }) {
       )}
 
       {showCircles && (
-        <PlayerCircles players={players} anim={circlesAnim} />
+        <PlayerCircles players={players} anim={circlesAnim} eliminatedIds={eliminatedIds} eliminatedCurrent={eliminatedCurrent} />
       )}
 
       {answerBanner !== 'none' && answerBanner !== 'done' && (
@@ -572,6 +647,11 @@ function Game(props: { toast: (message: string) => void; blocked: boolean }) {
               }
             }}
           />
+        </div>
+      )}
+      {gameOver && (
+        <div className={gameOverShow ? 'gameOverOverlay gameOverOverlay--show' : 'gameOverOverlay'} aria-hidden="true">
+          <img className="gameOverImg" src={gameOverSVG} alt="" />
         </div>
       )}
     </section>
@@ -713,9 +793,10 @@ function Login(props: {
     if (pending || props.blocked) return
     setPending(true)
     try {
-      const token = await login(username.trim(), password)
-      localStorage.setItem(TOKEN_KEY, token)
+      const result = await login(username.trim(), password)
+      localStorage.setItem(TOKEN_KEY, result.token)
       localStorage.setItem(USERNAME_KEY, username.trim())
+      localStorage.setItem(USER_ID_KEY, String(result.id))
       props.onLoggedIn()
     } catch {
       props.toast('登录失败')
@@ -763,7 +844,7 @@ function Login(props: {
             onClick={props.onRegister}
             disabled={pending || props.blocked}
             aria-label="register"
-          />
+          >注册</button>
         </div>
       </div>
     </main>
@@ -914,6 +995,9 @@ export default function App() {
           alt=""
           aria-hidden="true"
         />
+        {view === 'splash' && (
+          <div className="splashHint">按任意键进入游戏......</div>
+        )}
       </main>
       <Fade on={transitionOn} />
       {toastMessage && <Toast message={toastMessage} />}

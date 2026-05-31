@@ -253,6 +253,13 @@ func (r *Room) handleAnswer(userID int64, msg *Message) {
 		return
 	}
 
+	for _, p := range r.Game.Players {
+		if p.UserID == userID && !p.Alive {
+			r.mu.Unlock()
+			return
+		}
+	}
+
 	var answerText string
 	if err := json.Unmarshal(msg.Content, &answerText); err != nil {
 		answerText = string(msg.Content)
@@ -271,6 +278,13 @@ func (r *Room) handleVote(userID int64, targetUserID int64) {
 	if r.Game == nil || r.Game.Phase != PhaseVote {
 		r.mu.Unlock()
 		return
+	}
+
+	for _, p := range r.Game.Players {
+		if p.UserID == userID && !p.Alive {
+			r.mu.Unlock()
+			return
+		}
 	}
 
 	allDone := r.gameUsecase.SubmitVote(r.Game, userID, targetUserID)
