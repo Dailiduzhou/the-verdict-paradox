@@ -6,6 +6,24 @@ info:
     title: User API
     version: 0.0.1
 paths:
+    /v1/health:
+        get:
+            tags:
+                - User
+            operationId: User_Health
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/HealthCheckReply'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
     /v1/users/login:
         post:
             tags:
@@ -191,6 +209,9 @@ components:
                     description: The type of the serialized message.
             additionalProperties: true
             description: Contains an arbitrary serialized message along with a @type that describes the type of the serialized message.
+        HealthCheckReply:
+            type: object
+            properties: {}
         LoginReply:
             type: object
             properties:

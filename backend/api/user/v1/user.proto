@@ -46,6 +46,11 @@ service User {
       body: "*"
     };
   }
+    rpc Health(HealthCheckRequest) returns (HealthCheckReply){
+      option (google.api.http) = {
+        get: "/v1/health"
+      };
+    }
 }
 
 message RegisterRequest {
@@ -100,4 +105,11 @@ message VerifyRequest {
 
 message VerifyReply {
   bool valid = 1;
+}
+
+message HealthCheckRequest {
+}
+
+message HealthCheckReply{
+
 }
