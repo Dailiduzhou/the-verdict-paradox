@@ -171,3 +171,4 @@ vite.config.ts.timestamp-*
 .vite/ .vscode/
 
 ./codegraph
+.gocache/
