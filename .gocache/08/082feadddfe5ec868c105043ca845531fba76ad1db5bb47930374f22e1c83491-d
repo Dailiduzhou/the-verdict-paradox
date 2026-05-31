@@ -1,6 +1,0 @@
-./channel.go
-./server.go
-./socket.go
-./sockopt_linux.go
-./subchannel.go
-./util.go

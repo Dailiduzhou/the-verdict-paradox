@@ -1,5 +1,0 @@
-./metadata.go
-./span.go
-./statshandler.go
-./tracer.go
-./tracing.go
