@@ -19,9 +19,21 @@ type View = 'splash' | 'login' | 'register' | 'game'
 const TOKEN_KEY = 'token'
 const USERNAME_KEY = 'username'
 const USER_ID_KEY = 'user_id'
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').trim().replace(/\/+$/, '')
+const WS_BASE_URL = (import.meta.env.VITE_WS_BASE_URL ?? '').trim().replace(/\/+$/, '')
+
+function apiUrl(path: string) {
+  return API_BASE_URL ? `${API_BASE_URL}${path}` : path
+}
+
+function wsBaseUrl() {
+  if (WS_BASE_URL) return WS_BASE_URL
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  return `${protocol}//${window.location.host}`
+}
 
 async function login(username: string, password: string) {
-  const res = await fetch('/v1/users/login', {
+  const res = await fetch(apiUrl('/v1/users/login'), {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
@@ -37,7 +49,7 @@ async function login(username: string, password: string) {
 }
 
 async function startGame(name: string, token: string) {
-  const res = await fetch('/v1/game/start', {
+  const res = await fetch(apiUrl('/v1/game/start'), {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
@@ -53,7 +65,7 @@ async function startGame(name: string, token: string) {
 }
 
 async function getMatchStatus(matchID: string, token: string) {
-  const res = await fetch(`/v1/game/status/${encodeURIComponent(matchID)}`, {
+  const res = await fetch(apiUrl(`/v1/game/status/${encodeURIComponent(matchID)}`), {
     method: 'GET',
     headers: {
       Authorization: `Bearer ${token}`,
@@ -65,13 +77,12 @@ async function getMatchStatus(matchID: string, token: string) {
 }
 
 function toWsUrl(roomID: string, token: string) {
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
   const qs = new URLSearchParams({ token })
-  return `${protocol}//${window.location.host}/ws/room/${encodeURIComponent(roomID)}?${qs.toString()}`
+  return `${wsBaseUrl()}/ws/room/${encodeURIComponent(roomID)}?${qs.toString()}`
 }
 
 async function register(username: string, password: string) {
-  const res = await fetch('/v1/users/register', {
+  const res = await fetch(apiUrl('/v1/users/register'), {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
@@ -84,7 +95,7 @@ async function register(username: string, password: string) {
 
 async function verifyToken(token: string) {
   try {
-    const res = await fetch('/v1/users/verify', {
+    const res = await fetch(apiUrl('/v1/users/verify'), {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
@@ -436,6 +447,8 @@ function Game(props: { toast: (message: string) => void; blocked: boolean }) {
                 const winner = msg.content?.winner as string | undefined
                 if (winner === 'HUMAN') {
                   setGameOverSVG(storedRoleRef.current === 'SPY' ? spyWinSvg : humanWinSvg)
+                } else if (winner === 'SPY') {
+                  setGameOverSVG(spyWinSvg)
                 } else {
                   setGameOverSVG(aiWinSvg)
                 }

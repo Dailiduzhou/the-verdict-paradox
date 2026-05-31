@@ -32,7 +32,7 @@ services:
 
   game:
     build:
-      context: ./backend
+      context: .
       dockerfile: app/game/Dockerfile
       args:
         - GOPROXY=https://goproxy.cn
@@ -50,16 +50,6 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-
-  frontend:
-    build:
-      context: ./frontend
-    container_name: verdict-frontend
-    restart: unless-stopped
-    ports:
-      - "80:80"
-    depends_on:
-      - game
 
 volumes:
   pgdata:
