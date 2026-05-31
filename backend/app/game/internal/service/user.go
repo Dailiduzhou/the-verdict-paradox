@@ -97,3 +97,7 @@ func (s *UserService) Verify(ctx context.Context, req *pb.VerifyRequest) (*pb.Ve
 	}
 	return &pb.VerifyReply{Valid: true}, nil
 }
+
+func (s *UserService) Health(ctx context.Context, _ *pb.HealthCheckRequest) (*pb.HealthCheckReply, error) {
+	return &pb.HealthCheckReply{}, nil
+}
