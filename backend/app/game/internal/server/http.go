@@ -104,5 +104,9 @@ func NewHTTPServer(c *conf.Server, user *service.UserService, game *service.Game
 		_ = rm.HandleWS(w, r, roomID, strconv.FormatInt(claims.UserID, 10), userName)
 	})
 
+	if frontend, _ := frontendHandler(); frontend != nil {
+		srv.HandlePrefix("/", frontend)
+	}
+
 	return srv
 }

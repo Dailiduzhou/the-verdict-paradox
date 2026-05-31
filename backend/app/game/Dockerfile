@@ -1,4 +1,5 @@
 ARG GO_VERSION=1.26
+ARG NODE_VERSION=22
 
 FROM golang:${GO_VERSION} AS builder
 
@@ -16,13 +17,23 @@ ENV GOOS=linux
 
 WORKDIR /src
 
-COPY go.mod go.sum ./
+COPY backend/go.mod backend/go.sum ./
 RUN go mod download
 
-COPY . .
+COPY backend ./
 
 RUN mkdir -p bin && \
     go build -ldflags "-X main.Version=docker-build" -o ./bin/server ./app/game/cmd/game
+
+FROM node:${NODE_VERSION}-alpine AS frontend-builder
+
+WORKDIR /src/frontend
+
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+
+COPY frontend ./
+RUN npm run build
 
 FROM debian:stable-slim
 
@@ -33,6 +44,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get autoremove -y && apt-get autoclean -y
 
 COPY --from=builder /src/bin /app
+COPY --from=frontend-builder /src/frontend/dist /app/frontend-dist
 
 WORKDIR /app
 
