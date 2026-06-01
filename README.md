@@ -1,18 +1,124 @@
-# the-verdict-paradox
-Defend your identity.
+# The Verdict Paradox
 
-## Deployment modes
+AI 伪装成人类，人类伪装成 AI —— 一场身份推理与语言博弈的社交 deduction 游戏。
 
-### Local development
+## 游戏背景
 
-- Frontend: run `npm run dev` in `frontend/`
-- Backend: run the Go service on `:8000`
-- The frontend keeps using relative `/v1` and `/ws` paths, with Vite proxy forwarding them locally
+图灵测试的终极变体：当 AI 学会伪装人类，而人类故意模仿 AI 时，谁才是真正的「人」？
 
-### Single-service production
+## 玩家配置
 
-- Build and run the Go backend image from [backend/app/game/Dockerfile](/home/mikufan/code/the-verdict-paradox/backend/app/game/Dockerfile)
-- That image now builds the frontend and serves the frontend static files, API, and WebSocket from the same origin
-- `docker-compose.yml` exposes only the backend service on port `8000`
+每局固定 **6 名玩家**：
 
-`GitHub Pages` cannot host this full stack because it only serves static files and cannot run the Go backend or WebSocket service.
+| 角色 | 人数 | 身份说明 |
+|------|------|----------|
+| **HUMAN**（普通人类） | 3 人 | 真实人类玩家，按自己风格答题 |
+| **SPY**（卧底人类） | 1 人 | 真实人类，但秘密扮演 AI，需要伪装成 AI 的答题风格来迷惑普通人类 |
+| **AI**（AI 机器人） | 2 个 | LLM 驱动的 AI，伪装成普通人类参与答题 |
+
+- SPY 不知道谁是 AI，AI 也不知道谁是 SPY
+- 所有玩家互相不知道对方身份
+- AI 由 LLM 驱动，拥有复杂的拟人系统提示词，包括人设、情绪、语言风格等
+
+## 游戏流程
+
+### 匹配阶段
+
+1. 玩家注册/登录后，点击「Enter」进入匹配池
+2. 凑齐 **4 名真人玩家** 后自动开局
+3. 系统随机分配角色：1 人成为 SPY，其余 3 人为普通 HUMAN
+4. 系统随机抽取 2 个 AI 名字（从 34 个预设网名中选取）并注入 LLM 人格
+
+### 角色揭示
+
+开局后每位真人玩家收到自己的身份卡（HUMAN 或 SPY），展示 6 秒后进入游戏。
+
+### 回合流程
+
+每回合包含以下阶段：
+
+```
+QUESTION → ANSWER → VOTE → RESULT → (下一轮或结束)
+```
+
+**1. QUESTION（出题）**
+
+系统从 40 道题库中随机抽取一道问题广播给所有玩家。问题涵盖生活、价值观、想象力等话题，例如「如果明天是世界末日，你今天会做什么？」
+
+**2. ANSWER（答题）**
+
+所有存活玩家（包括人类和 AI）各自提交答案：
+- 真人玩家在文本框中输入回答，限时 **180 秒**
+- AI 玩家由 LLM 根据聊天历史生成拟人回答
+- 所有人类提交后（或超时后），系统收集所有答案，打乱顺序后匿名展示
+
+**3. VOTE（投票）**
+
+玩家查看本轮所有答案，投票选择你认为**最可疑**的玩家：
+- 真人玩家点击目标投票，限时 **180 秒**
+- AI 玩家由 LLM 根据对话历史推理投票
+- 所有人类投票后（或超时后），统计票数
+
+**4. RESULT（结果）**
+
+- 得票最高者被淘汰（平票则无人淘汰）
+- 展示淘汰结果 5 秒
+- 若未分出胜负，等待 6 秒后进入下一轮
+
+### 断线重连
+
+- 玩家断线后，角色保留在游戏中（ConnID 置空）
+- **2 分钟**内重新连接可恢复游戏状态
+- 超时未重连且房间无其他玩家 → AI 自动获胜
+- 游戏中的房间空闲 **10 分钟**后自动销毁
+
+## 胜利条件
+
+| 胜利方 | 条件 |
+|--------|------|
+| **SPY 阵营**（SPY + AI） | 所有普通人类被淘汰 |
+| **HUMAN 阵营**（普通人类） | 所有 AI 被淘汰 |
+
+- SPY 的作用是混淆视听：故意模仿 AI 答题风格，让普通人类难以辨别真正的 AI
+- AI 的目标是精准识别并投票淘汰普通人类，同时隐藏自身 AI 身份
+- 人类的目标是找出真正的 AI 并投票淘汰
+
+## AI 行为系统
+
+AI 玩家由 LLM 驱动，遵循精心设计的系统提示词：
+
+- **拟人伪装**：使用日常口语、流露情绪、允许不完美表达、保持人格一致性
+- **推理系统**：全程追踪每个玩家的语言习惯和逻辑模式，建立行为档案，分层甄别身份
+- **战术规划**：伪装优先，暗中锁定淘汰目标，保持中立避免成为焦点
+- **严格边界**：内部推理与对外发言分离，绝不暴露分析过程或 AI 身份特征
+
+## 技术架构
+
+- **后端**：Go（Kratos 微服务框架）+ WebSocket 实时通信
+- **前端**：React + TypeScript + Vite
+- **AI 引擎**：LLM API（OpenAI 兼容接口）
+- **数据存储**：PostgreSQL + Redis（匹配池）
+
+## 部署方式
+
+### 本地开发
+
+```bash
+# 前端
+cd frontend && npm run dev
+
+# 后端（监听 :8000）
+cd backend/app/game && go run ./cmd/game/
+```
+
+前端通过 Vite proxy 将 `/v1` 和 `/ws` 转发到后端。
+
+### 单服务生产部署
+
+```bash
+docker-compose up
+```
+
+后端镜像内嵌前端静态文件，同时提供 API、WebSocket 和静态文件服务，统一暴露在 `:8000` 端口。
+
+GitHub Pages 无法部署此项目，因为它需要 Go 后端和 WebSocket 服务。
