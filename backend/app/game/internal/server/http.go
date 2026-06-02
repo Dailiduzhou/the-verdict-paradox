@@ -85,22 +85,26 @@ func NewHTTPServer(c *conf.Server, user *service.UserService, game *service.Game
 
 		token := r.URL.Query().Get("token")
 		if token == "" {
+			log.NewHelper(logger).Warnf("ws connect to room [%s] rejected: missing token", roomID)
 			stdhttp.Error(w, `{"code":401,"reason":"AUTH_ERROR","message":"missing token"}`, stdhttp.StatusUnauthorized)
 			return
 		}
 
 		claims, err := authUc.VerifyToken(r.Context(), token)
 		if err != nil {
+			log.NewHelper(logger).Warnf("ws connect to room [%s] rejected: invalid token", roomID)
 			stdhttp.Error(w, "", stdhttp.StatusUnauthorized)
 			return
 		}
 
 		userName, err := user.GetUserName(r.Context(), claims.UserID)
 		if err != nil {
+			log.NewHelper(logger).Warnf("ws connect to room [%s] rejected: user %d not found", roomID, claims.UserID)
 			stdhttp.Error(w, "", stdhttp.StatusUnauthorized)
 			return
 		}
 
+		log.NewHelper(logger).Infof("ws connect: user=%s id=%d room=%s", userName, claims.UserID, roomID)
 		_ = rm.HandleWS(w, r, roomID, strconv.FormatInt(claims.UserID, 10), userName)
 	})
 

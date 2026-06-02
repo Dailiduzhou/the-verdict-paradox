@@ -357,8 +357,10 @@ func (r *Room) advanceToVote() {
 	r.phaseTimer = time.AfterFunc(voteTimeout, func() {
 		r.mu.Lock()
 		shouldAdvance := r.Game != nil && r.Game.Phase == PhaseVote
+		round := r.Game.Round
 		r.mu.Unlock()
 		if shouldAdvance {
+			r.log.Infof("room [%s] round %d: vote phase timeout, forcing tally", r.ID, round)
 			r.generateAIVotesAndTally()
 		}
 	})
@@ -448,6 +450,7 @@ func (r *Room) generateAIVotesAndTally() {
 
 func (r *Room) nextRound() {
 	r.Game.Round++
+	r.log.Infof("room [%s] round %d starting", r.ID, r.Game.Round)
 	r.Game.Phase = PhaseQuestion
 	r.Game.Question = r.gameUsecase.PickQuestion(r.Game)
 	r.gameUsecase.BeginRound(r.Game)
@@ -475,8 +478,10 @@ func (r *Room) nextRound() {
 	r.phaseTimer = time.AfterFunc(answerTimeout, func() {
 		r.mu.Lock()
 		shouldAdvance := r.Game != nil && r.Game.Phase == PhaseAnswer
+		round := r.Game.Round
 		r.mu.Unlock()
 		if shouldAdvance {
+			r.log.Infof("room [%s] round %d: answer phase timeout, forcing vote", r.ID, round)
 			r.advanceToVote()
 		}
 	})
@@ -514,6 +519,7 @@ func (r *Room) endGame(winner string) {
 }
 
 func (r *Room) startGame() {
+	r.log.Infof("room [%s] game starting with %d players", r.ID, len(r.Game.Players))
 	r.gameUsecase.BeginRound(r.Game)
 
 	playerList := make([]map[string]interface{}, 0, len(r.Game.Players))
@@ -775,6 +781,7 @@ func (r *Room) Run() {
 				if gameActive {
 					r.mu.Lock()
 					if r.Game != nil && r.Game.Phase != PhaseEnd {
+						r.log.Infof("room [%s] all players disconnected, ending game", r.ID)
 						r.endGame("AI")
 						r.mu.Unlock()
 					} else {
@@ -884,6 +891,7 @@ func (r *Room) loadOrCreateGame() {
 		r.log.Errorf("load game session failed: %v", err)
 	}
 	if session != nil {
+		r.log.Infof("room [%s] game session restored from redis, round=%d phase=%s", r.ID, session.Round, session.Phase)
 		session.mu = sync.RWMutex{}
 		session.StopCh = make(chan struct{})
 		r.Game = session

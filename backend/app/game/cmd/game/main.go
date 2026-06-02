@@ -76,13 +76,15 @@ func main() {
 		panic(err)
 	}
 
+	log.Infof("starting %s version=%s id=%s", Name, Version, id)
+	log.Infof("config loaded from %s", flagconf)
+
 	app, cleanup, err := wireApp(bc.Server, bc.Data, bc.Auth, logger)
 	if err != nil {
 		panic(err)
 	}
 	defer cleanup()
 
-	// start and wait for stop signal
 	if err := app.Run(); err != nil {
 		panic(err)
 	}

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/Dailiduzhou/the-verdict-paradox/backend/app/game/internal/biz"
 	"github.com/go-kratos/kratos/v2/log"
@@ -77,8 +78,11 @@ func (c *OpenAIClient) chat(ctx context.Context, messages []chatMessage) (string
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+c.apiKey)
 
+	start := time.Now()
 	resp, err := c.client.Do(req)
+	elapsed := time.Since(start)
 	if err != nil {
+		c.log.WithContext(ctx).Errorf("LLM API call failed after %v: %v", elapsed, err)
 		return "", fmt.Errorf("do request: %w", err)
 	}
 	defer resp.Body.Close()
@@ -89,8 +93,11 @@ func (c *OpenAIClient) chat(ctx context.Context, messages []chatMessage) (string
 	}
 
 	if resp.StatusCode != http.StatusOK {
+		c.log.WithContext(ctx).Errorf("LLM API returned %d after %v: %s", resp.StatusCode, elapsed, string(respBody))
 		return "", fmt.Errorf("LLM API returned %d: %s", resp.StatusCode, string(respBody))
 	}
+
+	c.log.WithContext(ctx).Debugf("LLM API call success, model=%s, elapsed=%v", c.model, elapsed)
 
 	var result chatCompletionResponse
 	if err := json.Unmarshal(respBody, &result); err != nil {

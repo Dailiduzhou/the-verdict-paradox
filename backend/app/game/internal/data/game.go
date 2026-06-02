@@ -142,7 +142,7 @@ func (r *MatchRepo) PushBackToPool(ctx context.Context, users []int64) error {
 		r.log.WithContext(ctx).Errorf("PushBackToPool ZAdd failed: %v", err)
 		return errors.InternalServer("MATCH_ERROR", "failed to push back players")
 	}
-	r.log.WithContext(ctx).Infof("push back to pool succeeded: %v", users)
+	r.log.WithContext(ctx).Warnf("push back to pool: %v", users)
 	return nil
 }
 
