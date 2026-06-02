@@ -31,7 +31,7 @@ func NewMatchServer(mu *biz.MatchUsecase, logger log.Logger) *MatchServer {
 
 // Start Kratos 启动时会自动调用此方法
 func (s *MatchServer) Start(ctx context.Context) error {
-	s.log.Infof("匹配服务引擎已启动，轮询间隔: %v", s.tickInterval)
+	s.log.Infof("match engine started, tick interval=%v", s.tickInterval)
 
 	ticker := time.NewTicker(s.tickInterval)
 	defer ticker.Stop()
@@ -44,7 +44,7 @@ func (s *MatchServer) Start(ctx context.Context) error {
 			cancel()
 
 		case <-s.stop:
-			s.log.Info("接收到停止信号，匹配循环已安全退出")
+			s.log.Info("match engine received stop signal, exiting loop")
 			return nil
 		}
 	}
@@ -52,7 +52,7 @@ func (s *MatchServer) Start(ctx context.Context) error {
 
 // Stop Kratos 收到关闭信号（如Ctrl+C，K8s销毁Pod）时会自动调用此方法
 func (s *MatchServer) Stop(ctx context.Context) error {
-	s.log.Info("正在关闭匹配服务引擎...")
+	s.log.Info("match engine shutting down")
 	close(s.stop) // 触发 Start 中的 s.stop 分支，退出循环
 
 	// 在这里可以做一些清理工作，比如把处于异常状态的队列数据重置

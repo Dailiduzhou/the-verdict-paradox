@@ -106,7 +106,7 @@ func (r *UserRepo) GetUserByID(ctx context.Context, id int64) (*biz.User, error)
 			return userDoublecheck, nil
 		}
 
-		r.log.WithContext(ctx).Infof("user %d fetching from DB", id)
+		r.log.WithContext(ctx).Debugf("user %d cache miss, fetching from DB", id)
 		dbUser, err := r.data.q.GetUserByID(ctx, id)
 		if err != nil {
 			if stderrors.Is(err, pgx.ErrNoRows) {

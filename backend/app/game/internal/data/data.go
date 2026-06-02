@@ -32,9 +32,10 @@ type Data struct {
 }
 
 // NewData .
-func NewData(pool *pgxpool.Pool, rdb *redis.Client) (*Data, func(), error) {
+func NewData(pool *pgxpool.Pool, rdb *redis.Client, logger log.Logger) (*Data, func(), error) {
+	log.NewHelper(logger).Info("data layer initialized: postgres and redis connected")
 	cleanup := func() {
-		log.Info("closing the data resources")
+		log.NewHelper(logger).Info("closing data resources")
 	}
 	return &Data{
 		rdb: rdb,

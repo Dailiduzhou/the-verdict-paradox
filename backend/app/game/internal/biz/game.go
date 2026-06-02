@@ -275,6 +275,7 @@ func (uc *GameUsecase) GenerateAIAnswers(ctx context.Context, session *GameSessi
 		}
 
 		uc.RecordAIAnswer(session, p.UserID, p.Name, answer)
+		uc.log.WithContext(ctx).Debugf("AI %s answered round %d", p.Name, session.Round)
 	}
 	session.PendingAI = false
 	return nil

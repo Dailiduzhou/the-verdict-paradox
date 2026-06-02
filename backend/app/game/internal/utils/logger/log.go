@@ -11,28 +11,33 @@ import (
 )
 
 func NewJSONLogger() log.Logger {
+	level := zap.InfoLevel
+	if lvl := os.Getenv("LOG_LEVEL"); lvl != "" {
+		if parsed, err := zapcore.ParseLevel(lvl); err == nil {
+			level = parsed
+		}
+	}
+
 	encoderConfig := zap.NewProductionEncoderConfig()
-	encoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder // 使用人类可读的时间格式
+	encoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
 
 	core := zapcore.NewCore(
 		zapcore.NewJSONEncoder(encoderConfig),
 		zapcore.NewMultiWriteSyncer(
 			zapcore.AddSync(os.Stdout),
 		),
-		zap.InfoLevel,
+		level,
 	)
 
 	zlogger := zap.New(core)
 
-	// 3. 包装为 Kratos 的 Logger
 	logger := kratoszap.NewLogger(zlogger)
 
-	// 4. 注入全局公共字段（TraceID 是排查问题的核心）
 	return log.With(logger,
 		"ts", log.DefaultTimestamp,
 		"caller", log.DefaultCaller,
 		"service.name", "the-verdict-paradox",
-		"trace.id", tracing.TraceID(), // 自动从 context 提取 traceID
+		"trace.id", tracing.TraceID(),
 		"span.id", tracing.SpanID(),
 	)
 }

@@ -37,6 +37,7 @@ func (s *UserService) Register(ctx context.Context, req *pb.RegisterRequest) (*p
 	if err != nil {
 		return nil, err
 	}
+	s.log.WithContext(ctx).Infof("user registered: id=%d name=%s", user.ID, user.Name)
 	return &pb.RegisterReply{Id: user.ID}, nil
 }
 
@@ -45,6 +46,7 @@ func (s *UserService) Login(ctx context.Context, req *pb.LoginRequest) (*pb.Logi
 	if err != nil {
 		return nil, err
 	}
+	s.log.WithContext(ctx).Infof("user logged in: id=%d name=%s", user.ID, user.Name)
 	return &pb.LoginReply{Id: user.ID, Token: token}, nil
 }
 

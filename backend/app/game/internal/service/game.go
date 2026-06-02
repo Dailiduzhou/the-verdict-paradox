@@ -35,7 +35,7 @@ func (s *GameService) StartMatch(ctx context.Context, req *pb.StartMatchRequest)
 
 	status, roomID, err := s.matchRepo.GetPlayerStatus(ctx, user.ID)
 	if err == nil && status == "IN_GAME" && roomID != "" {
-		s.log.WithContext(ctx).Infof("玩家 %s (ID:%d) 已在房间 %s 中，直接返回", req.Name, user.ID, roomID)
+		s.log.WithContext(ctx).Infof("user %s (id=%d) already in room [%s]", req.Name, user.ID, roomID)
 		return &pb.StartMatchReply{MatchID: roomID}, nil
 	}
 
@@ -45,7 +45,7 @@ func (s *GameService) StartMatch(ctx context.Context, req *pb.StartMatchRequest)
 	}
 
 	matchID := fmt.Sprintf("%d", user.ID)
-	s.log.WithContext(ctx).Infof("玩家 %s (ID:%d) 加入匹配池", req.Name, user.ID)
+	s.log.WithContext(ctx).Infof("user %s (id=%d) joined match pool", req.Name, user.ID)
 	return &pb.StartMatchReply{MatchID: matchID}, nil
 }
 
@@ -61,7 +61,7 @@ func (s *GameService) CancelMatch(ctx context.Context, req *pb.CancelMatchReques
 		return nil, err
 	}
 
-	s.log.WithContext(ctx).Infof("玩家 %s (ID:%d) 取消匹配", req.Name, user.ID)
+	s.log.WithContext(ctx).Infof("user %s (id=%d) cancelled match", req.Name, user.ID)
 	return &pb.CancelMatchReply{}, nil
 }
 

@@ -33,7 +33,7 @@ func wireApp(confServer *conf.Server, confData *conf.Data, auth *conf.Auth, logg
 		cleanup()
 		return nil, nil, err
 	}
-	dataData, cleanup3, err := data.NewData(pool, client)
+	dataData, cleanup3, err := data.NewData(pool, client, logger)
 	if err != nil {
 		cleanup2()
 		cleanup()
