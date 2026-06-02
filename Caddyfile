@@ -1,4 +1,4 @@
-yourdomain.com {
+verdict-paradox.muxistudio.com {
     encode zstd gzip
     reverse_proxy game:8000
 }
