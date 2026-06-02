@@ -342,6 +342,7 @@ func (r *Room) advanceToVote() {
 
 	r.Game.Phase = PhaseVote
 	r.Game.VoteCount = 0
+	r.log.Infof("room [%s] round %d: advance to vote phase", r.ID, currentRound)
 
 	if r.phaseTimer != nil {
 		r.phaseTimer.Stop()
@@ -395,6 +396,7 @@ func (r *Room) generateAIVotesAndTally() {
 
 	eliminated := r.gameUsecase.TallyVotes(r.Game)
 	r.Game.Phase = PhaseResult
+	r.log.Infof("room [%s] round %d result: eliminated=%d", r.ID, r.Game.Round, eliminated)
 
 	eliminatedName := ""
 	for _, p := range r.Game.Players {
@@ -483,6 +485,7 @@ func (r *Room) nextRound() {
 func (r *Room) endGame(winner string) {
 	r.Game.Phase = PhaseEnd
 	r.Game.Winner = winner
+	r.log.Infof("room [%s] game over, winner=%s, rounds=%d", r.ID, winner, r.Game.Round)
 
 	if r.phaseTimer != nil {
 		r.phaseTimer.Stop()
@@ -931,6 +934,7 @@ func (r *Room) loadOrCreateGame() {
 
 	r.Game = r.gameUsecase.NewGameSession(r.ID, playerIDs, names)
 	r.Game.StopCh = make(chan struct{})
+	r.log.Infof("room [%s] new game created with %d players", r.ID, len(playerIDs))
 
 	for _, p := range r.Game.Players {
 		for client := range r.Clients {
