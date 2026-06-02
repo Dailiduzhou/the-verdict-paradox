@@ -848,24 +848,6 @@ func (r *Room) handleDisconnect(client *Client) {
 			p.ConnID = ""
 			r.log.Infof("player %s disconnected from game in room %s", p.Name, r.ID)
 
-			// If a real player disconnects, end the game immediately.
-			if p.Role != RoleAI && r.Game.Phase != PhaseEnd {
-				r.endGame("")
-
-				// Clean up Redis state so the next match is not contaminated.
-				go func() {
-					ctx := context.Background()
-					for _, pl := range r.Game.Players {
-						if pl.Role != RoleAI {
-							_ = r.matchRepo.ClearPlayerState(ctx, pl.UserID)
-						}
-					}
-					_ = r.matchRepo.DeleteRoomInfo(ctx, r.ID)
-					_ = r.gameRepo.DeleteSession(ctx, r.ID)
-				}()
-				return
-			}
-
 			for client2 := range r.Clients {
 				if client2.UserID == client.UserID && client2 != client {
 					return

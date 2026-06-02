@@ -445,13 +445,7 @@ function Game(props: { toast: (message: string) => void; blocked: boolean }) {
               }
               if (msg.action === 'game_over') {
                 const winner = msg.content?.winner as string | undefined
-                if (winner === 'HUMAN') {
-                  setGameOverSVG(storedRoleRef.current === 'SPY' ? spyWinSvg : humanWinSvg)
-                } else if (winner === 'SPY') {
-                  setGameOverSVG(spyWinSvg)
-                } else {
-                  setGameOverSVG(aiWinSvg)
-                }
+                setGameOverSVG(winner === 'SPY' ? spyWinSvg : winner === 'HUMAN' ? humanWinSvg : aiWinSvg)
                 // Phase 1: fade out everything except background
                 setGamePhase('fadeOut')
                 window.setTimeout(() => {

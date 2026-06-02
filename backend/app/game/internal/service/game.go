@@ -33,6 +33,12 @@ func (s *GameService) StartMatch(ctx context.Context, req *pb.StartMatchRequest)
 		return nil, err
 	}
 
+	status, roomID, err := s.matchRepo.GetPlayerStatus(ctx, user.ID)
+	if err == nil && status == "IN_GAME" && roomID != "" {
+		s.log.WithContext(ctx).Infof("玩家 %s (ID:%d) 已在房间 %s 中，直接返回", req.Name, user.ID, roomID)
+		return &pb.StartMatchReply{MatchID: roomID}, nil
+	}
+
 	if err := s.matchRepo.JoinPool(ctx, user.ID); err != nil {
 		s.log.WithContext(ctx).Errorf("join pool failed: %v", err)
 		return nil, err
