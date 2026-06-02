@@ -86,6 +86,23 @@ async function startGame(name: string, token: string) {
   return data.matchID
 }
 
+async function cancelMatch(name: string, token: string) {
+  const res = await fetch(apiUrl('/v1/game/cancel'), {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ name }),
+  })
+
+  if (!res.ok) {
+    logErr(`cancel match failed: HTTP ${res.status}`)
+    throw new Error('cancel_failed')
+  }
+  log('match cancelled')
+}
+
 async function getMatchStatus(matchID: string, token: string) {
   const res = await fetch(apiUrl(`/v1/game/status/${encodeURIComponent(matchID)}`), {
     method: 'GET',
@@ -343,7 +360,7 @@ function Game(props: { toast: (message: string) => void; blocked: boolean }) {
   }
 
   const submit = async () => {
-    if (props.blocked || matching || connectedRoomID) return
+    if (props.blocked || connectedRoomID) return
 
     const token = localStorage.getItem(TOKEN_KEY)
     const name = localStorage.getItem(USERNAME_KEY)
@@ -354,6 +371,22 @@ function Game(props: { toast: (message: string) => void; blocked: boolean }) {
     }
     if (!name) {
       props.toast('缺少用户名')
+      return
+    }
+
+    // If already matching, cancel instead.
+    if (matching) {
+      try {
+        log(`cancelling match: user=${name}`)
+        await cancelMatch(name, token)
+      } catch (err) {
+        logErr('match cancel error', err)
+        props.toast('取消失败')
+      } finally {
+        if (pollTimerRef.current != null) window.clearInterval(pollTimerRef.current)
+        pollTimerRef.current = null
+        setMatching(false)
+      }
       return
     }
 
@@ -578,7 +611,7 @@ function Game(props: { toast: (message: string) => void; blocked: boolean }) {
         onPointerCancel={onPressEnd}
         onPointerLeave={onPressEnd}
         onClick={voting && voteBanner === 'done' ? submitVote : answering && answerBanner === 'done' ? submitAnswer : submit}
-        disabled={currentUserId && eliminatedIds.includes(currentUserId) ? true : voting && voteBanner === 'done' ? voteSent : answering && answerBanner === 'done' ? answerSent : props.blocked || matching || !!connectedRoomID}
+        disabled={currentUserId && eliminatedIds.includes(currentUserId) ? true : voting && voteBanner === 'done' ? voteSent : answering && answerBanner === 'done' ? answerSent : props.blocked || !!connectedRoomID}
       >
         <span className="enterBtnInner">
           {voteSent
