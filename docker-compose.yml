@@ -38,9 +38,9 @@ services:
         - GOPROXY=https://goproxy.cn
     container_name: verdict-game
     restart: unless-stopped
-    ports:
-      - "8000:8000"
-      - "9000:9000"
+    expose:
+      - "8000"
+      - "9000"
     volumes:
       - ./backend/app/game/configs:/data/conf
     env_file:
@@ -51,5 +51,21 @@ services:
       redis:
         condition: service_healthy
 
+  caddy:
+    image: caddy:2-alpine
+    container_name: verdict-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - game
+
 volumes:
   pgdata:
+  caddy_data:
+  caddy_config:
