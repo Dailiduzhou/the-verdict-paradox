@@ -22,6 +22,20 @@ const USER_ID_KEY = 'user_id'
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').trim().replace(/\/+$/, '')
 const WS_BASE_URL = (import.meta.env.VITE_WS_BASE_URL ?? '').trim().replace(/\/+$/, '')
 
+const LOG_PREFIX = '[VP]'
+
+function log(msg: string, data?: unknown) {
+  if (data !== undefined) {
+    console.log(`${LOG_PREFIX} ${msg}`, data)
+  } else {
+    console.log(`${LOG_PREFIX} ${msg}`)
+  }
+}
+
+function logErr(msg: string, err?: unknown) {
+  console.error(`${LOG_PREFIX} ${msg}`, err ?? '')
+}
+
 function apiUrl(path: string) {
   return API_BASE_URL ? `${API_BASE_URL}${path}` : path
 }
@@ -42,9 +56,13 @@ async function login(username: string, password: string) {
     body: JSON.stringify({ name: username, password }),
   })
 
-  if (!res.ok) throw new Error('login_failed')
+  if (!res.ok) {
+    logErr(`login failed: HTTP ${res.status}`)
+    throw new Error('login_failed')
+  }
   const data = (await res.json()) as { id?: number; token?: string }
   if (!data.token) throw new Error('missing_token')
+  log(`login success: user=${username} id=${data.id}`)
   return { token: data.token, id: data.id ?? 0 }
 }
 
@@ -58,9 +76,13 @@ async function startGame(name: string, token: string) {
     body: JSON.stringify({ name }),
   })
 
-  if (!res.ok) throw new Error('start_failed')
+  if (!res.ok) {
+    logErr(`start game failed: HTTP ${res.status}`)
+    throw new Error('start_failed')
+  }
   const data = (await res.json()) as { matchID?: string }
   if (!data.matchID) throw new Error('missing_match_id')
+  log(`match started: matchID=${data.matchID}`)
   return data.matchID
 }
 
@@ -72,7 +94,10 @@ async function getMatchStatus(matchID: string, token: string) {
     },
   })
 
-  if (!res.ok) throw new Error('status_failed')
+  if (!res.ok) {
+    logErr(`match status failed: HTTP ${res.status}`)
+    throw new Error('status_failed')
+  }
   return (await res.json()) as { status?: string; roomID?: string }
 }
 
@@ -90,7 +115,11 @@ async function register(username: string, password: string) {
     body: JSON.stringify({ name: username, password }),
   })
 
-  if (!res.ok) throw new Error('register_failed')
+  if (!res.ok) {
+    logErr(`register failed: HTTP ${res.status}`)
+    throw new Error('register_failed')
+  }
+  log('register success')
 }
 
 async function verifyToken(token: string) {
@@ -103,10 +132,16 @@ async function verifyToken(token: string) {
       body: JSON.stringify({ token }),
     })
 
-    if (!res.ok) return false
+    if (!res.ok) {
+      logErr(`token verify failed: HTTP ${res.status}`)
+      return false
+    }
     const data = (await res.json()) as { valid?: boolean }
-    return data.valid === true
-  } catch {
+    const valid = data.valid === true
+    log(`token verify: valid=${valid}`)
+    return valid
+  } catch (err) {
+    logErr('token verify error', err)
     return false
   }
 }
@@ -325,7 +360,7 @@ function Game(props: { toast: (message: string) => void; blocked: boolean }) {
     setMatching(true)
     setDots(1)
     try {
-      // Backend currently expects {matchid} to be the username (not the numeric matchID).
+      log(`entering match pool: user=${name}`)
       await startGame(name, token)
 
       if (pollTimerRef.current != null) window.clearInterval(pollTimerRef.current)
@@ -339,6 +374,7 @@ function Game(props: { toast: (message: string) => void; blocked: boolean }) {
           pollTimerRef.current = null
           setMatching(false)
 
+          log(`match found: roomID=${s.roomID}, connecting WS`)
           const ws = new WebSocket(toWsUrl(s.roomID, token))
           wsRef.current = ws
           setConnectedRoomID(s.roomID)
@@ -349,6 +385,7 @@ function Game(props: { toast: (message: string) => void; blocked: boolean }) {
               if (msg.action === 'game_started') {
                 const role = msg.content?.your_role as string | undefined
                 const pls = msg.content?.players as { user_id: number; name: string }[] | undefined
+                log(`game started: role=${role} players=${pls?.length ?? 0}`)
                 if (pls) {
                   setPlayers(pls)
                 }
@@ -364,6 +401,8 @@ function Game(props: { toast: (message: string) => void; blocked: boolean }) {
               }
               if (msg.action === 'phase_change') {
                 const phase = msg.content?.phase as string | undefined
+                const round = msg.content?.round as number | undefined
+                log(`phase change: phase=${phase} round=${round}`)
                 if (phase === 'WAITING') {
                   setGameWaiting(true)
                   setVoting(false)
@@ -445,6 +484,7 @@ function Game(props: { toast: (message: string) => void; blocked: boolean }) {
               }
               if (msg.action === 'game_over') {
                 const winner = msg.content?.winner as string | undefined
+                log(`game over: winner=${winner}`)
                 setGameOverSVG(winner === 'SPY' ? spyWinSvg : winner === 'HUMAN' ? humanWinSvg : aiWinSvg)
                 // Phase 1: fade out everything except background
                 setGamePhase('fadeOut')
@@ -467,6 +507,8 @@ function Game(props: { toast: (message: string) => void; blocked: boolean }) {
               }
               if (msg.action === 'round_result') {
                 const eid = msg.content?.eliminated_id as number | undefined
+                const elimName = msg.content?.eliminated as string | undefined
+                log(`round result: eliminated=${elimName} id=${eid}`)
                 if (eid && eid !== 0) {
                   setEliminatedIds((prev) => [...prev, eid])
                   setEliminatedCurrent(eid)
@@ -474,28 +516,36 @@ function Game(props: { toast: (message: string) => void; blocked: boolean }) {
               }
               if (msg.action === 'all_answers') {
                 const ans = msg.content?.answers as { user_id: number; name: string; content: string }[] | undefined
+                log(`all answers received: count=${ans?.length ?? 0}`)
                 if (ans) setRoundAnswers(ans)
               }
               if (msg.action === 'question') {
                 const q = msg.content?.question as string | undefined
+                log(`question received: round=${msg.content?.round}`)
                 if (q) setCurrentQuestion(q)
               }
-            } catch {
-              // ignore
+            } catch (err) {
+              logErr('ws message parse error', err)
             }
           })
           ws.addEventListener('close', () => {
+            log('ws disconnected')
             wsRef.current = null
             setConnectedRoomID(null)
           })
-        } catch {
+          ws.addEventListener('error', () => {
+            logErr('ws connection error')
+          })
+        } catch (err) {
+          logErr('match polling error', err)
           if (pollTimerRef.current != null) window.clearInterval(pollTimerRef.current)
           pollTimerRef.current = null
           setMatching(false)
           props.toast('匹配失败')
         }
       }, 1000)
-    } catch {
+    } catch (err) {
+      logErr('match start error', err)
       setMatching(false)
       props.toast('匹配失败')
     }
@@ -504,12 +554,14 @@ function Game(props: { toast: (message: string) => void; blocked: boolean }) {
   const submitVote = () => {
     if (!wsRef.current || voteSent || selectedVote == null) return
     setVoteSent(true)
+    log(`vote submitted: target=${selectedVote}`)
     wsRef.current.send(JSON.stringify({ action: 'vote', target_user_id: selectedVote }))
   }
 
   const submitAnswer = () => {
     if (!wsRef.current || answerSent || !answerText.trim()) return
     setAnswerSent(true)
+    log('answer submitted')
     wsRef.current.send(JSON.stringify({ action: 'answer', content: answerText.trim() }))
   }
 
@@ -911,14 +963,18 @@ export default function App() {
 
       const token = localStorage.getItem(TOKEN_KEY)
       if (!token) {
+        log('no stored token, redirecting to login')
         transitionTo('login')
         return
       }
 
+      log('verifying stored token')
       const valid = await verifyToken(token)
       if (valid) {
+        log('token valid, auto-entering game')
         transitionTo('game')
       } else {
+        log('token invalid, redirecting to login')
         localStorage.removeItem(TOKEN_KEY)
         transitionTo('login')
       }
