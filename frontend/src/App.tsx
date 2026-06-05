@@ -52,8 +52,8 @@ async function login(username: string, password: string) {
     headers: {
       'content-type': 'application/json',
     },
-    // Backend contract is { phone, password }. Treat username as phone here.
-    body: JSON.stringify({ name: username, password }),
+    // exactly name + password
+    body: JSON.stringify({ name: username.trim(), password }),
   })
 
   if (!res.ok) {
