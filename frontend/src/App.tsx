@@ -52,7 +52,6 @@ async function login(username: string, password: string) {
     headers: {
       'content-type': 'application/json',
     },
-    // exactly name + password
     body: JSON.stringify({ name: username.trim(), password }),
   })
 
@@ -259,6 +258,7 @@ function Game(props: { toast: (message: string) => void; blocked: boolean }) {
   const [voteDots, setVoteDots] = useState(1)
   const [eliminatedIds, setEliminatedIds] = useState<number[]>([])
   const [eliminatedCurrent, setEliminatedCurrent] = useState<number | null>(null)
+  const [connectedCount, setConnectedCount] = useState(0)
   const [gameOver, setGameOver] = useState(false)
   const [gameOverSVG, setGameOverSVG] = useState('')
   const [gameOverShow, setGameOverShow] = useState(false)
@@ -408,9 +408,15 @@ function Game(props: { toast: (message: string) => void; blocked: boolean }) {
           setMatching(false)
 
           log(`match found: roomID=${s.roomID}, connecting WS`)
-          const ws = new WebSocket(toWsUrl(s.roomID, token))
+          const roomID = s.roomID
+          const ws = new WebSocket(toWsUrl(roomID, token))
           wsRef.current = ws
-          setConnectedRoomID(s.roomID)
+          setConnectedCount(0)
+
+          ws.addEventListener('open', () => {
+            log('ws connected')
+            setConnectedRoomID(roomID)
+          })
 
           ws.addEventListener('message', (e) => {
             try {
@@ -421,6 +427,7 @@ function Game(props: { toast: (message: string) => void; blocked: boolean }) {
                 log(`game started: role=${role} players=${pls?.length ?? 0}`)
                 if (pls) {
                   setPlayers(pls)
+                  setConnectedCount(pls.length)
                 }
                 if (!storedRole && role) { storedRoleRef.current = role; setStoredRole(role) }
                 if (role === 'HUMAN' || role === 'SPY') {
@@ -431,6 +438,11 @@ function Game(props: { toast: (message: string) => void; blocked: boolean }) {
                   window.setTimeout(() => setRoleFadeIn(false), 5500)
                   window.setTimeout(() => setRoleReveal(null), 6000)
                 }
+              }
+              if (msg.action === 'player_joined') {
+                const sid = msg.sender
+                log(`player joined: ${sid}`)
+                setConnectedCount((c) => c + 1)
               }
               if (msg.action === 'phase_change') {
                 const phase = msg.content?.phase as string | undefined
@@ -565,6 +577,7 @@ function Game(props: { toast: (message: string) => void; blocked: boolean }) {
             log('ws disconnected')
             wsRef.current = null
             setConnectedRoomID(null)
+            setConnectedCount(0)
           })
           ws.addEventListener('error', () => {
             logErr('ws connection error')
@@ -627,7 +640,9 @@ function Game(props: { toast: (message: string) => void; blocked: boolean }) {
                       : gameWaiting
                         ? ''
                         : connectedRoomID
-                          ? 'Ready'
+                          ? connectedCount > 0
+                            ? `玩家 ${connectedCount}/4...`
+                            : 'Waiting...'
                           : matching
                             ? `Matching${'.'.repeat(dots)}`
                             : 'Enter'}
